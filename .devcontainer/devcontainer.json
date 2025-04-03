@@ -1,0 +1,50 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/python
+{
+	"name": "Deep-regressors",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"build": {
+        "dockerfile": "Dockerfile"
+    },
+
+    "runArgs": ["--gpus", "all"],
+
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	// "features": {},
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+
+	// Use 'postCreateCommand' to run commands after the container is created.
+	// "postCreateCommand": "pip3 install --user -r requirements.txt",
+
+	// Configure tool-specific properties.
+	"customizations": {
+        // Configure the vscode.
+        "vscode": {
+            // Install the vscode extension.
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "ms-python.debugpy",
+                "ms-toolsai.jupyter",
+                "github.copilot",
+                "github.copilot-chat",
+                "njpwerner.autodocstring",
+                "mechatroner.rainbow-csv"
+            ]
+        }
+        
+    },
+
+    // Mount the data directory in the container.
+    "mounts": [
+        "source=/home/ahmed/Data,target=/workspaces/Deep-regressors/data,type=bind,consistency=cached",
+        "source=/mnt/hdd/Data,target=/workspaces/Deep-regressors/data_hdd,type=bind,consistency=cached",
+        "source=/media/ahmed/6F7E-F5D4/new_lames,target=/workspaces/Deep-regressors/data_external,type=bind,consistency=cached",
+        "source=/home/ahmed/QP-projects,target=/workspaces/Deep-regressors/qp-projects,type=bind,consistency=cached"
+    ]
+
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	// "remoteUser": "root"
+}
