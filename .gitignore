@@ -1,3 +1,15 @@
+# Files
+*.csv
+*.yml
+*.png
+
+# Data
+data
+data_hdd
+data_external
+qp-projects
+models
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
