@@ -2,6 +2,9 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+from dataset import MALDI_multisamples
+from model import LinearRegression
+
 
 def predict(model: nn.Module,
             data_tensor: torch.Tensor,
@@ -30,8 +33,35 @@ def predict(model: nn.Module,
 
 # Example usage (optional, part of main.py usually)
 if __name__ == '__main__':
-    # This part is typically run from main.py
-    print("This script contains the inference function.")
-    print("To run inference, execute main.py after training.")
-    # You could add placeholder code here for direct testing if needed,
-    # using a dummy model and data.
+    # --- Configuration ---
+    PATH = "data/MALDI_IHC/correlations/"
+    PEAKS_PATH = f"{PATH}peaks_standardized_lasso.pkl"
+    PIXELS_PATH = f"{PATH}pixels_filtered_lasso.pkl"
+    TARGET = 'Density_CD8'
+    MODEL_PATH = 'models/linear_regression.pth'
+
+    # --- Load the data ---
+    dataset = MALDI_multisamples(peaks=PEAKS_PATH, pixels=PIXELS_PATH, target=TARGET)
+    data_tensor = dataset.features  # Example: use the features for prediction
+    print(f"Data tensor shape: {data_tensor.shape}")
+    print("Data tensor loaded.")
+
+    # --- Load the model ---
+    input_dim = dataset.n_features
+    output_dim = 1 
+
+    # Load the model
+    model = LinearRegression(input_dim=input_dim, output_dim=output_dim)
+    model.load_state_dict(torch.load(MODEL_PATH))
+    
+    # --- Make predictions ---
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+
+    predictions = predict(model, data_tensor, device)
+    print("Predictions made.")
+    print(f"Predictions shape: {predictions.shape}")
+
+    # Optionally, save predictions to a file
+    np.save('predictions.npy', predictions)
+    print("Predictions saved to predictions.npy.")
