@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
+import yaml
 
 from dataset import MALDI_multisamples
 from model import MLPRegression
@@ -40,13 +41,21 @@ def predict(model: nn.Module,
 
 # Example usage (optional, part of main.py usually)
 if __name__ == '__main__':
+    
     # --- Configuration ---
-    PATH = "data/MALDI_IHC/correlations/"
-    PEAKS_PATH = f"{PATH}peaks_standardized.pkl"
-    PIXELS_PATH = f"{PATH}pixels_filtered.pkl"
-    TARGET = 'Density_CD8'
-    MODEL_PATH = 'models/MLP_regression.pth'
-    BATCH_SIZE = 10**5
+    with open("mlp_regression/config.yaml", 'r') as config_file:
+        config = yaml.safe_load(config_file)  # Load model configuration from YAML file
+
+    PATH = config.get('path_to_data_inference')
+    PEAKS_PATH = config.get('peaks_path_inference')
+    PIXELS_PATH = config.get('pixels_path_inference')
+    TARGET = config.get('target_inference')
+    BATCH_SIZE = config.get('batch_size_inference')
+
+    # MLP Hyperparameters
+    HIDDEN_DIM = config.get('hidden_dim')  # Number of neurons in hidden layers
+    NUM_HIDDEN_LAYERS = config.get('num_hidden_layers')  # Number of hidden layers
+    MODEL_PATH = f'models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.pth'  # Path to the saved model
 
     # --- Load the data ---
     dataset = MALDI_multisamples(peaks=PEAKS_PATH, pixels=PIXELS_PATH, target=TARGET)
@@ -59,7 +68,7 @@ if __name__ == '__main__':
     output_dim = 1 
 
     # Load the model
-    model = MLPRegression(input_dim=input_dim, output_dim=output_dim)
+    model = MLPRegression(input_dim=input_dim, output_dim=output_dim, hidden_dim=HIDDEN_DIM, num_hidden_layers=NUM_HIDDEN_LAYERS)
     model.load_state_dict(torch.load(MODEL_PATH))
     
     # --- Make predictions ---
@@ -71,5 +80,5 @@ if __name__ == '__main__':
     print(f"Predictions shape: {predictions.shape}")
 
     # Optionally, save predictions to a file
-    np.save('predictions_mlp.npy', predictions)
-    print("Predictions saved to predictions_mlp.npy.")
+    np.save(f'predictions_mlp_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.npy', predictions)
+    print(f"Predictions saved to predictions_mlp_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.npy.")
