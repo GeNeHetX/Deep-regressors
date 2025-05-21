@@ -17,9 +17,13 @@ def train_model(model: nn.Module,
                 optimizer: optim.Optimizer,
                 num_epochs: int=10,
                 device: torch.device=torch.device('cpu'),
-                plot_loss: bool=False) -> dict:
+                plot_loss_path: str=None,
+                patience: int=10,
+                min_delta: float=1e-6,
+                val_train_gap: float=0.5,
+                model_save_path: str=None) -> dict:
     """
-    Trains the PyTorch model and validates after each epoch.
+    Trains the PyTorch model and validates after each epoch, with early stopping.
 
     Args:
         model (nn.Module): The model to train.
@@ -29,7 +33,11 @@ def train_model(model: nn.Module,
         optimizer: The optimization algorithm.
         num_epochs (int): Number of epochs to train for.
         device (torch.device): The device to train on ('cpu' or 'cuda').
-        plot_loss (bool): Whether to plot the training and validation loss.
+        plot_loss_path (str): Path to save the training and validation loss plot.
+        patience (int): Number of epochs to wait for improvement before stopping.
+        min_delta (float): Minimum change in validation loss to qualify as improvement.
+        val_train_gap (float): Minimum required improvement in validation loss relative to training loss decrease.
+        model_save_path (str): Path to save the best model.
 
     Returns:
         dict: A dictionary containing training and validation losses for each epoch.
@@ -40,35 +48,32 @@ def train_model(model: nn.Module,
     # Initialize history dictionary
     history = {'train_loss': [], 'val_loss': []}
 
+    best_val_loss = float('inf')
+    best_epoch = 0
+    patience_counter = 0
+
     for epoch in tqdm(range(num_epochs), desc="Training Progress", unit="epoch"):
         # Training phase
-        model.train()  # Set the model to training mode
+        model.train()
         epoch_train_loss = 0.0
         for inputs, targets in train_loader:
             inputs, targets = inputs.to(device), targets.to(device)
-
-            # Forward pass
             outputs = model(inputs)
             loss = criterion(outputs, targets)
-
-            # Backward pass
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
             epoch_train_loss += loss.item() * inputs.size(0)
 
         avg_train_loss = epoch_train_loss / len(train_loader.dataset)
         history['train_loss'].append(avg_train_loss)
 
         # Validation phase
-        model.eval()  # Set the model to evaluation mode
+        model.eval()
         epoch_val_loss = 0.0
         with torch.no_grad():
             for inputs, targets in val_loader:
                 inputs, targets = inputs.to(device), targets.to(device)
-
-                # Forward pass
                 outputs = model(inputs)
                 loss = criterion(outputs, targets)
                 epoch_val_loss += loss.item() * inputs.size(0)
@@ -79,10 +84,27 @@ def train_model(model: nn.Module,
         # Print losses for the epoch
         tqdm.write(f"Epoch [{epoch+1}/{num_epochs}], Train Loss: {avg_train_loss:.2e}, Val Loss: {avg_val_loss:.2e}")
 
+        # Early stopping logic
+        if epoch > 0:
+            # Check if validation loss is not decreasing enough
+            if history['val_loss'][-2] - avg_val_loss < min_delta:
+                patience_counter += 1
+
+            if avg_val_loss < best_val_loss - min_delta:
+                best_val_loss = avg_val_loss
+                best_epoch = epoch
+                patience_counter = 0
+                if model_save_path:
+                    torch.save(model.state_dict(), model_save_path)
+
+            if patience_counter >= patience:
+                tqdm.write(f"Early stopping triggered at epoch {epoch+1}. Best epoch was {best_epoch+1} with val loss {best_val_loss:.2e}.")
+                break
+
     print("Training finished.")
 
     # Optionally plot the losses
-    if plot_loss:
+    if plot_loss_path:
         plt.figure(figsize=(10, 5))
         plt.plot(history['train_loss'], label='Training Loss')
         plt.plot(history['val_loss'], label='Validation Loss')
@@ -90,7 +112,7 @@ def train_model(model: nn.Module,
         plt.ylabel('Loss')
         plt.title('Training and Validation Loss Over Epochs')
         plt.legend()
-        plt.savefig('training_validation_loss.png')
+        plt.savefig(plot_loss_path)
         plt.close()
 
     return history  # Return the history dictionary
