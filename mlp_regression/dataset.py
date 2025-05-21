@@ -8,6 +8,16 @@ class MALDI_multisamples(Dataset):
     Reads a peaks file and a pixels file, separates features and target, and converts them to PyTorch tensors.
     """
     def __init__(self, peaks: str, pixels: str, target: str):
+        """Initialize the dataset by loading peaks and pixels data.
+
+        Args:
+            peaks (str): Path to the peaks data file.
+            pixels (str): Path to the pixels data file.
+            target (str): Name of the target variable.
+
+        Raises:
+            ValueError: If the number of samples in features and targets do not match.
+        """
         # Load the dataset
         self.features = torch.tensor(data=pd.read_pickle(peaks).values,
                                      dtype=torch.float32)

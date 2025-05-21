@@ -2,6 +2,11 @@
 *.csv
 *.yml
 *.png
+*.npy
+*.jpg
+*.jpeg
+*.json
+*.txt
 
 # Data
 data

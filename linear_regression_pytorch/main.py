@@ -17,7 +17,7 @@ PIXELS_PATH = f"{PATH}pixels_filtered_lasso.pkl"
 TARGET = 'Density_CD8'
 MODEL_SAVE_PATH = 'models/linear_regression.pth'
 LEARNING_RATE = 0.01
-NUM_EPOCHS = 2
+NUM_EPOCHS = 100
 BATCH_SIZE = 10**5
 VALIDATION_SPLIT = 0.1  # Fraction of data to use for validation
 

@@ -1,0 +1,25 @@
+# Training configuration
+path_to_data: data/MALDI_IHC/correlations
+peaks_path: data/MALDI_IHC/correlations/peaks_standardized_lesion.pkl
+pixels_path: data/MALDI_IHC/correlations/pixels_filtered_lesion.pkl
+target: Density_CD8
+batch_size: 512
+num_epochs: 300
+learning_rate: 0.0001
+validation_split: 0.1
+weight_decay: 0.0001
+
+# Early stopping configuration
+patience: 30
+min_delta: 0.000001
+
+# Model configuration
+hidden_dim: 512
+num_hidden_layers: 3
+
+# Inference configuration
+path_to_data_inference: data/MALDI_IHC/correlations
+peaks_path_inference: data/MALDI_IHC/correlations/peaks_standardized.pkl
+pixels_path_inference: data/MALDI_IHC/correlations/pixels_filtered.pkl
+target_inference: Density_CD8
+batch_size_inference: 100000

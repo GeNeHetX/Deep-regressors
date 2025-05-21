@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 import os  # For checking if model file exists
+import yaml
 
 # Import custom modules
 from dataset import MALDI_multisamples
@@ -11,26 +12,38 @@ from train import train_model
 from inference import predict
 
 # --- Configuration ---
-PATH = "data/MALDI_IHC/correlations/"
-PEAKS_PATH = f"{PATH}peaks_standardized.pkl"
-PIXELS_PATH = f"{PATH}pixels_filtered.pkl"
-TARGET = 'Density_CD8'
-MODEL_SAVE_PATH = 'models/MLP_regression.pth'
-LEARNING_RATE = 0.01
-NUM_EPOCHS = 10
-BATCH_SIZE = 5*10**5
-VALIDATION_SPLIT = 0.1  # Fraction of data to use for validation
+# Load configuration from YAML file
+with open("mlp_regression/config.yaml", 'r') as config_file:
+    config = yaml.safe_load(config_file)  # Load model configuration from YAML file
 
+# Extract hyperparameters from the config
+PATH = config.get('path_to_data')
+PEAKS_PATH = config.get('peaks_path')
+PIXELS_PATH = config.get('pixels_path')
+TARGET = config.get('target')
+
+# Training Hyperparameters
+LEARNING_RATE = config.get('learning_rate')
+NUM_EPOCHS = config.get('num_epochs')
+BATCH_SIZE = config.get('batch_size')
+VALIDATION_SPLIT = config.get('validation_split')
+WEIGHT_DECAY = config.get('weight_decay')
+
+# Early Stopping Hyperparameters
+PATIENCE = config.get('patience')
+MIN_DELTA = config.get('min_delta')
 
 # MLP Hyperparameters
-HIDDEN_DIM = 64
-NUM_HIDDEN_LAYERS = 2
+HIDDEN_DIM = config.get('hidden_dim')  # Number of neurons in hidden layers
+NUM_HIDDEN_LAYERS = config.get('num_hidden_layers')  # Number of hidden layers
+MODEL_SAVE_PATH = f'models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.pth'
+PLOT_LOSS_PATH = f'figures/MLP_regression_loss_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.png'
 
 # Determine device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device: {device}")
 
-# --- 1. Load Data ---
+# Load Data
 print("Loading data...")
 dataset = MALDI_multisamples(peaks=PEAKS_PATH, pixels=PIXELS_PATH, target=TARGET)
 
@@ -51,27 +64,32 @@ print(f"Training samples: {len(train_dataset)}, Validation samples: {len(val_dat
 input_dim = dataset.n_features
 output_dim = 1
 
-# --- 2. Initialize Model, Loss, Optimizer ---
+# Initialize Model, Loss and Optimizer
 print("Initializing model...")
 model = MLPRegression(input_dim=input_dim, output_dim=output_dim, hidden_dim=HIDDEN_DIM, num_hidden_layers=NUM_HIDDEN_LAYERS)
 
 # Loss Function (Mean Squared Error for regression)
 criterion = nn.MSELoss()
 
-# Optimizer (Stochastic Gradient Descent)
-optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE)
-# You could also use Adam: optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+# Optimizer
+optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
-# --- 3. Training ---
+# Training
 print("Starting training...")
-history = train_model(model, train_loader, val_loader, criterion, optimizer, NUM_EPOCHS, device, plot_loss=True)
+history = train_model(model=model,
+                      train_loader=train_loader,
+                      val_loader=val_loader,
+                      criterion=criterion,
+                      optimizer=optimizer,
+                      num_epochs=NUM_EPOCHS,
+                      device=device,
+                      patience=PATIENCE,
+                      min_delta=MIN_DELTA,
+                      plot_loss_path=PLOT_LOSS_PATH,
+                      model_save_path=MODEL_SAVE_PATH)
+print("Training completed.")
 
-# --- 4. Save the Trained Model ---
-print(f"Saving model to {MODEL_SAVE_PATH}...")
-torch.save(model.state_dict(), MODEL_SAVE_PATH)
-print("Model saved.")
-
-# --- 5. Inference Example ---
+# Inference Example
 print("\n--- Inference Example ---")
 
 # Create a new model instance for loading (or reuse the trained 'model')
