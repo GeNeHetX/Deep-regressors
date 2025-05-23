@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
+from torch.optim.lr_scheduler import OneCycleLR
 import os  # For checking if model file exists
 import yaml
 
@@ -23,10 +24,13 @@ PIXELS_PATH = config.get('pixels_path')
 TARGET = config.get('target')
 
 # Training Hyperparameters
-LEARNING_RATE = config.get('learning_rate')
 NUM_EPOCHS = config.get('num_epochs')
 BATCH_SIZE = config.get('batch_size')
 VALIDATION_SPLIT = config.get('validation_split')
+
+# Optimization Hyperparameters
+LEARNING_RATE = config.get('learning_rate')
+MAX_LR = config.get('max_lr')
 WEIGHT_DECAY = config.get('weight_decay')
 
 # Early Stopping Hyperparameters
@@ -72,21 +76,32 @@ model = MLPRegression(input_dim=input_dim, output_dim=output_dim, hidden_dim=HID
 criterion = nn.MSELoss()
 
 # Optimizer
-optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+
+# OneCycleLR Scheduler
+scheduler = OneCycleLR(
+    optimizer,
+    max_lr=MAX_LR,
+    steps_per_epoch=len(train_loader),
+    epochs=NUM_EPOCHS
+)
 
 # Training
 print("Starting training...")
-history = train_model(model=model,
-                      train_loader=train_loader,
-                      val_loader=val_loader,
-                      criterion=criterion,
-                      optimizer=optimizer,
-                      num_epochs=NUM_EPOCHS,
-                      device=device,
-                      patience=PATIENCE,
-                      min_delta=MIN_DELTA,
-                      plot_loss_path=PLOT_LOSS_PATH,
-                      model_save_path=MODEL_SAVE_PATH)
+history = train_model(
+    model=model,
+    train_loader=train_loader,
+    val_loader=val_loader,
+    criterion=criterion,
+    optimizer=optimizer,
+    num_epochs=NUM_EPOCHS,
+    device=device,
+    patience=PATIENCE,
+    min_delta=MIN_DELTA,
+    scheduler=scheduler,
+    plot_loss_path=PLOT_LOSS_PATH,
+    model_save_path=MODEL_SAVE_PATH
+)
 print("Training completed.")
 
 # Inference Example

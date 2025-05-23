@@ -20,7 +20,7 @@ def train_model(model: nn.Module,
                 plot_loss_path: str=None,
                 patience: int=10,
                 min_delta: float=1e-6,
-                val_train_gap: float=0.5,
+                scheduler=None,
                 model_save_path: str=None) -> dict:
     """
     Trains the PyTorch model and validates after each epoch, with early stopping.
@@ -36,7 +36,7 @@ def train_model(model: nn.Module,
         plot_loss_path (str): Path to save the training and validation loss plot.
         patience (int): Number of epochs to wait for improvement before stopping.
         min_delta (float): Minimum change in validation loss to qualify as improvement.
-        val_train_gap (float): Minimum required improvement in validation loss relative to training loss decrease.
+        scheduler: Learning rate scheduler (optional).
         model_save_path (str): Path to save the best model.
 
     Returns:
@@ -63,6 +63,8 @@ def train_model(model: nn.Module,
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            if scheduler is not None:
+                scheduler.step()
             epoch_train_loss += loss.item() * inputs.size(0)
 
         avg_train_loss = epoch_train_loss / len(train_loader.dataset)
