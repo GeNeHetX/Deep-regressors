@@ -7,13 +7,15 @@ class MALDI_multisamples(Dataset):
     Custom Dataset for MALDI data.
     Reads a peaks file and a pixels file, separates features and target, and converts them to PyTorch tensors.
     """
-    def __init__(self, features: str, targets: str, target: str, excluded_slides: list = None):
+    def __init__(self, features: str, targets: str, target: str, target_transform=None, excluded_slides: list = None):
         """Initialize the dataset by loading features and targets data.
 
         Args:
             features (str): Path to the features data file.
             targets (str): Path to the targets data file.
             target (str): Name of the target variable.
+            target_transform (callable, optional): A function to transform the target variable.
+            excluded_slides (list, optional): A list of slide IDs to exclude from the dataset.
 
         Raises:
             ValueError: If the number of samples in features and targets do not match.
@@ -41,15 +43,19 @@ class MALDI_multisamples(Dataset):
 
         # Convert features and targets to PyTorch tensors
         self.features = torch.tensor(data=self.features.values, dtype=torch.float32)
-        self.targets = torch.tensor(data=self.targets[target].values, dtype=torch.float32).unsqueeze(1)
+        # Ensure target is a numeric Series, not a DataFrame
+        self.targets = torch.tensor(data=self.targets[target].values, dtype=torch.float32)
+
+        # Apply target transformation if provided
+        if target_transform is not None:
+            self.targets = target_transform(self.targets)
+        self.targets = self.targets.unsqueeze(1)
 
         if self.features.shape[0] != self.targets.shape[0]:
             raise ValueError("Number of samples in features and targets do not match.")
 
         self.n_samples = self.features.shape[0]
         self.n_features = self.features.shape[1]
-
-
 
     def __len__(self):
         """

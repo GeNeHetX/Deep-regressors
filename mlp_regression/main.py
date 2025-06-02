@@ -5,12 +5,14 @@ from torch.utils.data import DataLoader, random_split
 from torch.optim.lr_scheduler import OneCycleLR
 import os  # For checking if model file exists
 import yaml
+import numpy as np
 
 # Import custom modules
 from dataset import MALDI_multisamples
 from model import MLPRegression
 from train import train_model
 from inference import predict
+from utils import get_target_transform, get_inverse_transform
 
 # --- Configuration ---
 # Load configuration from YAML file
@@ -42,8 +44,13 @@ MIN_DELTA = config.get('min_delta')
 # MLP Hyperparameters
 HIDDEN_DIM = config.get('hidden_dim')
 NUM_HIDDEN_LAYERS = config.get('num_hidden_layers')
-MODEL_SAVE_PATH = f'results/models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.pth'
-PLOT_LOSS_PATH = f'results/figures/MLP_regression_loss_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.png'
+DROPOUT = config.get('dropout')
+MODEL_SAVE_PATH = f'results/models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{HUBER_DELTA}.pth'
+PLOT_LOSS_PATH = f'results/figures/MLP_regression_loss_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{HUBER_DELTA}.png'
+TARGET_TRANSFORM = config.get('target_transform', 'sqrt')  # e.g., 'sqrt', 'log', or 'none'
+
+target_transform = get_target_transform(TARGET_TRANSFORM)
+inverse_transform = get_inverse_transform(TARGET_TRANSFORM)
 
 # Determine device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -51,7 +58,13 @@ print(f"Using device: {device}")
 
 # Load Data
 print("Loading data...")
-dataset = MALDI_multisamples(features=PEAKS_PATH, targets=PIXELS_PATH, target=TARGET, excluded_slides=EXCLUDED_SLIDES)
+dataset = MALDI_multisamples(
+    features=PEAKS_PATH,
+    targets=PIXELS_PATH,
+    target=TARGET,
+    target_transform=target_transform,
+    excluded_slides=EXCLUDED_SLIDES
+)
 
 # Split dataset into training and validation sets
 dataset_size = len(dataset)
@@ -72,7 +85,13 @@ output_dim = 1
 
 # Initialize Model, Loss and Optimizer
 print("Initializing model...")
-model = MLPRegression(input_dim=input_dim, output_dim=output_dim, hidden_dim=HIDDEN_DIM, num_hidden_layers=NUM_HIDDEN_LAYERS)
+model = MLPRegression(
+    input_dim=input_dim,
+    output_dim=output_dim,
+    hidden_dim=HIDDEN_DIM,
+    num_hidden_layers=NUM_HIDDEN_LAYERS,
+    dropout=DROPOUT
+)
 
 # Loss Function (Huber Loss for regression)
 criterion = nn.HuberLoss(delta=HUBER_DELTA) 
@@ -110,7 +129,7 @@ print("Training completed.")
 print("\n--- Inference Example ---")
 
 # Create a new model instance for loading (or reuse the trained 'model')
-inference_model = MLPRegression(input_dim=input_dim, output_dim=output_dim, hidden_dim=HIDDEN_DIM, num_hidden_layers=NUM_HIDDEN_LAYERS)
+inference_model = MLPRegression(input_dim=input_dim, output_dim=output_dim, hidden_dim=HIDDEN_DIM, num_hidden_layers=NUM_HIDDEN_LAYERS, dropout=DROPOUT)
 
 # Load the saved state dictionary
 if os.path.exists(MODEL_SAVE_PATH):
@@ -124,7 +143,10 @@ if os.path.exists(MODEL_SAVE_PATH):
 
     # Make predictions
     predictions = predict(inference_model, sample_features, device)
-    print(f"\nPredictions:\n{predictions}")
+    
+    # Invert the transformation for reporting
+    predictions = inverse_transform(predictions)
+    print(f"\nPredictions (inverted transform):\n{predictions}")
 
     # Optional: Print corresponding actual targets
     _, actual_targets = dataset[0:3]

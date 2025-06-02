@@ -6,6 +6,7 @@ import yaml
 
 from dataset import MALDI_multisamples
 from model import MLPRegression
+from utils import get_target_transform, get_inverse_transform
 
 
 def predict(model: nn.Module,
@@ -17,8 +18,7 @@ def predict(model: nn.Module,
 
     Args:
         model (nn.Module): The trained model.
-        data_tensor (torch.Tensor): Input data tensor for prediction
-                                   (shape: [n_samples, n_features]).
+        data_tensor (torch.Tensor): Input data tensor for prediction (shape: [n_samples, n_features]).
         device (torch.device): The device the model is on ('cpu' or 'cuda').
         batch_size (int): Batch size for prediction.
 
@@ -50,16 +50,29 @@ if __name__ == '__main__':
     PEAKS_PATH = config.get('peaks_path_inference')
     PIXELS_PATH = config.get('pixels_path_inference')
     TARGET = config.get('target_inference')
+    EXCLUDED_SLIDES = config.get('excluded_slides')  # Default to empty list if not provided
     BATCH_SIZE = config.get('batch_size_inference')
 
     # MLP Hyperparameters
     HIDDEN_DIM = config.get('hidden_dim')  # Number of neurons in hidden layers
     NUM_HIDDEN_LAYERS = config.get('num_hidden_layers')  # Number of hidden layers
+    DROPOUT = config.get('dropout')  # Dropout rate
+    TARGET_TRANSFORM = config.get('target_transform')  # e.g., 'sqrt', 'log', or 'none'
+
     MODEL_PATH = f'results/models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.pth'  # Path to the saved model
     PREDICTIONS_PATH = f'results/predictions/predictions_mlp_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.npy'
 
+    target_transform = get_target_transform(TARGET_TRANSFORM)
+    inverse_transform = get_inverse_transform(TARGET_TRANSFORM)
+
     # --- Load the data ---
-    dataset = MALDI_multisamples(peaks=PEAKS_PATH, pixels=PIXELS_PATH, target=TARGET)
+    dataset = MALDI_multisamples(
+        features=PEAKS_PATH,
+        targets=PIXELS_PATH,
+        target=TARGET,
+        target_transform=target_transform,
+        excluded_slides=EXCLUDED_SLIDES
+    )
     data_tensor = dataset.features  # Example: use the features for prediction
     print(f"Data tensor shape: {data_tensor.shape}")
     print("Data tensor loaded.")
@@ -69,7 +82,12 @@ if __name__ == '__main__':
     output_dim = 1 
 
     # Load the model
-    model = MLPRegression(input_dim=input_dim, output_dim=output_dim, hidden_dim=HIDDEN_DIM, num_hidden_layers=NUM_HIDDEN_LAYERS)
+    model = MLPRegression(input_dim=input_dim,
+                          output_dim=output_dim,
+                          hidden_dim=HIDDEN_DIM,
+                          num_hidden_layers=NUM_HIDDEN_LAYERS,
+                          dropout=DROPOUT)
+    
     model.load_state_dict(torch.load(MODEL_PATH))
     
     # --- Make predictions ---
@@ -79,6 +97,9 @@ if __name__ == '__main__':
     predictions = predict(model, data_tensor, device, batch_size=BATCH_SIZE)
     print("Predictions are done.")
     print(f"Predictions shape: {predictions.shape}")
+
+    # Invert the transformation before saving
+    predictions = inverse_transform(predictions)
 
     # Optionally, save predictions to a file
     np.save(PREDICTIONS_PATH, predictions)
