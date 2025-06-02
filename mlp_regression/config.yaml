@@ -1,15 +1,27 @@
-# Training configuration
+# Data configuration
 path_to_data: data/MALDI_IHC/correlations
 peaks_path: data/MALDI_IHC/correlations/peaks_standardized_lesion.pkl
 pixels_path: data/MALDI_IHC/correlations/pixels_filtered_lesion.pkl
 target: Density_CD8
+excluded_slides:
+  - 13AG03225-06
+  - 13AG06573-10
+  - 544085-14
+  - 546332-17
+  - 549724-18
+  - 549724-19
+  - 549764-29
+  - 549857-19
+  - 549857-22
+  - 552138-25
 
-# Data configuration
-batch_size: 512
+# Training configuration
+batch_size: 1024
 validation_split: 0.1
 
 # Optimization configuration
 num_epochs: 300
+huber_delta: 1
 learning_rate: 0.01
 max_lr: 0.01
 weight_decay: 0.0001
@@ -19,7 +31,7 @@ patience: 30
 min_delta: 0.000001
 
 # Model configuration
-hidden_dim: 1024
+hidden_dim: 512
 num_hidden_layers: 3
 
 # Inference configuration
