@@ -7,28 +7,49 @@ class MALDI_multisamples(Dataset):
     Custom Dataset for MALDI data.
     Reads a peaks file and a pixels file, separates features and target, and converts them to PyTorch tensors.
     """
-    def __init__(self, peaks: str, pixels: str, target: str):
-        """Initialize the dataset by loading peaks and pixels data.
+    def __init__(self, features: str, targets: str, target: str, excluded_slides: list = None):
+        """Initialize the dataset by loading features and targets data.
 
         Args:
-            peaks (str): Path to the peaks data file.
-            pixels (str): Path to the pixels data file.
+            features (str): Path to the features data file.
+            targets (str): Path to the targets data file.
             target (str): Name of the target variable.
 
         Raises:
             ValueError: If the number of samples in features and targets do not match.
         """
-        # Load the dataset
-        self.features = torch.tensor(data=pd.read_pickle(peaks).values,
-                                     dtype=torch.float32)
-        self.targets = torch.tensor(data=pd.read_pickle(pixels)[target].values,
-                                    dtype=torch.float32).unsqueeze(1) # Ensure target is shape [n_samples, 1]
+        # Load the features and targets data
+        self.features = pd.read_pickle(features)
+        self.targets = pd.read_pickle(targets)
+
+        # Check if the features and targets data are of the same length
+        if self.features.shape[0] != self.targets.shape[0]:
+            raise ValueError("Number of samples in features and targets do not match.")
+
+        # Check if the target exists in the targets data
+        if target not in self.targets.columns:
+            raise ValueError(f"Target '{target}' not found in targets data.")
+        
+        # Clean the data by dropping bad samples
+        if excluded_slides:
+            self.features = self.features[~self.targets['run'].isin(excluded_slides)]
+            self.targets = self.targets[~self.targets['run'].isin(excluded_slides)]
+
+        # Ensure features and targets are aligned
+        self.features = self.features.reset_index(drop=True)
+        self.targets = self.targets.reset_index(drop=True)
+
+        # Convert features and targets to PyTorch tensors
+        self.features = torch.tensor(data=self.features.values, dtype=torch.float32)
+        self.targets = torch.tensor(data=self.targets[target].values, dtype=torch.float32).unsqueeze(1)
 
         if self.features.shape[0] != self.targets.shape[0]:
             raise ValueError("Number of samples in features and targets do not match.")
 
         self.n_samples = self.features.shape[0]
         self.n_features = self.features.shape[1]
+
+
 
     def __len__(self):
         """

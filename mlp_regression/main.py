@@ -22,6 +22,7 @@ PATH = config.get('path_to_data')
 PEAKS_PATH = config.get('peaks_path')
 PIXELS_PATH = config.get('pixels_path')
 TARGET = config.get('target')
+EXCLUDED_SLIDES = config.get('excluded_slides')
 
 # Training Hyperparameters
 NUM_EPOCHS = config.get('num_epochs')
@@ -29,6 +30,7 @@ BATCH_SIZE = config.get('batch_size')
 VALIDATION_SPLIT = config.get('validation_split')
 
 # Optimization Hyperparameters
+HUBER_DELTA = config.get('huber_delta')
 LEARNING_RATE = config.get('learning_rate')
 MAX_LR = config.get('max_lr')
 WEIGHT_DECAY = config.get('weight_decay')
@@ -38,10 +40,10 @@ PATIENCE = config.get('patience')
 MIN_DELTA = config.get('min_delta')
 
 # MLP Hyperparameters
-HIDDEN_DIM = config.get('hidden_dim')  # Number of neurons in hidden layers
-NUM_HIDDEN_LAYERS = config.get('num_hidden_layers')  # Number of hidden layers
-MODEL_SAVE_PATH = f'models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.pth'
-PLOT_LOSS_PATH = f'figures/MLP_regression_loss_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.png'
+HIDDEN_DIM = config.get('hidden_dim')
+NUM_HIDDEN_LAYERS = config.get('num_hidden_layers')
+MODEL_SAVE_PATH = f'results/models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.pth'
+PLOT_LOSS_PATH = f'results/figures/MLP_regression_loss_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.png'
 
 # Determine device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -49,7 +51,7 @@ print(f"Using device: {device}")
 
 # Load Data
 print("Loading data...")
-dataset = MALDI_multisamples(peaks=PEAKS_PATH, pixels=PIXELS_PATH, target=TARGET)
+dataset = MALDI_multisamples(features=PEAKS_PATH, targets=PIXELS_PATH, target=TARGET, excluded_slides=EXCLUDED_SLIDES)
 
 # Split dataset into training and validation sets
 dataset_size = len(dataset)
@@ -72,8 +74,8 @@ output_dim = 1
 print("Initializing model...")
 model = MLPRegression(input_dim=input_dim, output_dim=output_dim, hidden_dim=HIDDEN_DIM, num_hidden_layers=NUM_HIDDEN_LAYERS)
 
-# Loss Function (Mean Squared Error for regression)
-criterion = nn.MSELoss()
+# Loss Function (Huber Loss for regression)
+criterion = nn.HuberLoss(delta=HUBER_DELTA) 
 
 # Optimizer
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)

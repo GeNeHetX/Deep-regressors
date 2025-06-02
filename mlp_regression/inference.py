@@ -55,7 +55,8 @@ if __name__ == '__main__':
     # MLP Hyperparameters
     HIDDEN_DIM = config.get('hidden_dim')  # Number of neurons in hidden layers
     NUM_HIDDEN_LAYERS = config.get('num_hidden_layers')  # Number of hidden layers
-    MODEL_PATH = f'models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.pth'  # Path to the saved model
+    MODEL_PATH = f'results/models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.pth'  # Path to the saved model
+    PREDICTIONS_PATH = f'results/predictions/predictions_mlp_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.npy'
 
     # --- Load the data ---
     dataset = MALDI_multisamples(peaks=PEAKS_PATH, pixels=PIXELS_PATH, target=TARGET)
@@ -80,5 +81,5 @@ if __name__ == '__main__':
     print(f"Predictions shape: {predictions.shape}")
 
     # Optionally, save predictions to a file
-    np.save(f'predictions_mlp_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.npy', predictions)
-    print(f"Predictions saved to predictions_mlp_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.npy.")
+    np.save(PREDICTIONS_PATH, predictions)
+    print(f"Predictions saved to {PREDICTIONS_PATH}.")
