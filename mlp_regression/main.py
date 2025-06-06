@@ -6,9 +6,10 @@ from torch.optim.lr_scheduler import OneCycleLR
 import os  # For checking if model file exists
 import yaml
 import numpy as np
+import pandas as pd
 
 # Import custom modules
-from dataset import MALDI_multisamples
+from dataset import TableDataset
 from model import MLPRegression
 from train import train_model
 from inference import predict
@@ -49,6 +50,7 @@ MODEL_SAVE_PATH = f'results/models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYER
 PLOT_LOSS_PATH = f'results/figures/MLP_regression_loss_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{HUBER_DELTA}.png'
 TARGET_TRANSFORM = config.get('target_transform', 'sqrt')  # e.g., 'sqrt', 'log', or 'none'
 
+# Define target transformation functions
 target_transform = get_target_transform(TARGET_TRANSFORM)
 inverse_transform = get_inverse_transform(TARGET_TRANSFORM)
 
@@ -58,15 +60,26 @@ print(f"Using device: {device}")
 
 # Load Data
 print("Loading data...")
-dataset = MALDI_multisamples(
-    features=PEAKS_PATH,
-    targets=PIXELS_PATH,
-    target=TARGET,
-    target_transform=target_transform,
-    excluded_slides=EXCLUDED_SLIDES
+peaks = pd.read_pickle(PEAKS_PATH)
+pixels = pd.read_pickle(PIXELS_PATH)
+
+# Clean the data by dropping excluded slides
+if EXCLUDED_SLIDES:
+    print(f"Dropping excluded slides...")
+    mask = ~pixels['run'].isin(EXCLUDED_SLIDES)
+    peaks = peaks[mask].reset_index(drop=True)
+    pixels = pixels[mask].reset_index(drop=True)
+
+# Pass cleaned arrays/DataFrames to the dataset
+print("Creating dataset...")
+dataset = TableDataset(
+    features=peaks.values,
+    target=pixels[TARGET].values,
+    target_transform=target_transform
 )
 
 # Split dataset into training and validation sets
+print("Splitting dataset into training and validation sets...")
 dataset_size = len(dataset)
 val_size = int(VALIDATION_SPLIT * dataset_size)
 train_size = dataset_size - val_size

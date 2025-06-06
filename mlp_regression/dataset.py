@@ -1,59 +1,34 @@
 import torch
-import pandas as pd
 from torch.utils.data import Dataset
 
-class MALDI_multisamples(Dataset):
+class TableDataset(Dataset):
     """
-    Custom Dataset for MALDI data.
-    Reads a peaks file and a pixels file, separates features and target, and converts them to PyTorch tensors.
+    Custom Dataset for tabular data.
+    Accepts features and target arrays, applies optional transformation.
     """
-    def __init__(self, features: str, targets: str, target: str, target_transform=None, excluded_slides: list = None):
-        """Initialize the dataset by loading features and targets data.
-
-        Args:
-            features (str): Path to the features data file.
-            targets (str): Path to the targets data file.
-            target (str): Name of the target variable.
-            target_transform (callable, optional): A function to transform the target variable.
-            excluded_slides (list, optional): A list of slide IDs to exclude from the dataset.
-
-        Raises:
-            ValueError: If the number of samples in features and targets do not match.
+    def __init__(self, features, target, target_transform=None):
         """
-        # Load the features and targets data
-        self.features = pd.read_pickle(features)
-        self.targets = pd.read_pickle(targets)
+        Args:
+            features (array-like): Features data (numpy array or DataFrame.values).
+            target (array-like): Target vector (numpy array or Series).
+            target_transform (callable, optional): A function to transform the target variable.
+        """
+        # Check if features and target are of the same length
+        if features.shape[0] != target.shape[0]:
+            raise ValueError("Number of samples in features and target do not match.")
 
-        # Check if the features and targets data are of the same length
-        if self.features.shape[0] != self.targets.shape[0]:
-            raise ValueError("Number of samples in features and targets do not match.")
-
-        # Check if the target exists in the targets data
-        if target not in self.targets.columns:
-            raise ValueError(f"Target '{target}' not found in targets data.")
-        
-        # Clean the data by dropping bad samples
-        if excluded_slides:
-            self.features = self.features[~self.targets['run'].isin(excluded_slides)]
-            self.targets = self.targets[~self.targets['run'].isin(excluded_slides)]
-
-        # Ensure features and targets are aligned
-        self.features = self.features.reset_index(drop=True)
-        self.targets = self.targets.reset_index(drop=True)
-
-        # Convert features and targets to PyTorch tensors
-        self.features = torch.tensor(data=self.features.values, dtype=torch.float32)
-        # Ensure target is a numeric Series, not a DataFrame
-        self.targets = torch.tensor(data=self.targets[target].values, dtype=torch.float32)
+        # Initialize the features and target as PyTorch tensors
+        self.features = torch.tensor(features, dtype=torch.float32)
+        self.target = torch.tensor(target, dtype=torch.float32)
 
         # Apply target transformation if provided
         if target_transform is not None:
-            self.targets = target_transform(self.targets)
-        self.targets = self.targets.unsqueeze(1)
+            self.target = target_transform(self.target)
 
-        if self.features.shape[0] != self.targets.shape[0]:
-            raise ValueError("Number of samples in features and targets do not match.")
+        # Ensure target is a 2D tensor with shape (n_samples, 1)
+        self.target = self.target.unsqueeze(1)
 
+        # Store the number of samples and features
         self.n_samples = self.features.shape[0]
         self.n_features = self.features.shape[1]
 
@@ -76,15 +51,15 @@ class MALDI_multisamples(Dataset):
             tuple: A tuple containing the features and target for the sample.
         """
         # Return one sample (features and target) at the given index
-        return self.features[index], self.targets[index]
+        return self.features[index], self.target[index]
 
 # Example usage (optional, for testing this file directly)
 if __name__ == '__main__':
 
     # --- Configuration ---
     PATH = "data/MALDI_IHC/correlations/"
-    PEAKS_PATH = f"{PATH}peaks_standardized_lasso.pkl"
-    PIXELS_PATH = f"{PATH}pixels_filtered_lasso.pkl"
+    PEAKS_PATH = f"{PATH}peaks_standardized_lesion.pkl"
+    PIXELS_PATH = f"{PATH}pixels_filtered_lesion.pkl"
     TARGET = 'Density_CD8'
 
     # Example: Load the dataset

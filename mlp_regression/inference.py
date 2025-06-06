@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 import yaml
 
-from dataset import MALDI_multisamples
+from dataset import TableDataset
 from model import MLPRegression
 from utils import get_target_transform, get_inverse_transform
 
@@ -52,6 +53,7 @@ if __name__ == '__main__':
     TARGET = config.get('target_inference')
     EXCLUDED_SLIDES = config.get('excluded_slides')  # Default to empty list if not provided
     BATCH_SIZE = config.get('batch_size_inference')
+    HUBER_DELTA = config.get('huber_delta')  # Huber loss delta value
 
     # MLP Hyperparameters
     HIDDEN_DIM = config.get('hidden_dim')  # Number of neurons in hidden layers
@@ -59,23 +61,31 @@ if __name__ == '__main__':
     DROPOUT = config.get('dropout')  # Dropout rate
     TARGET_TRANSFORM = config.get('target_transform')  # e.g., 'sqrt', 'log', or 'none'
 
-    MODEL_PATH = f'results/models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.pth'  # Path to the saved model
-    PREDICTIONS_PATH = f'results/predictions/predictions_mlp_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}.npy'
+    MODEL_PATH = f'results/models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{HUBER_DELTA}.pth'  # Path to the saved model
+    PREDICTIONS_PATH = f'results/predictions/predictions_mlp_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{HUBER_DELTA}.npy'
 
+    # Define target transformation functions
     target_transform = get_target_transform(TARGET_TRANSFORM)
     inverse_transform = get_inverse_transform(TARGET_TRANSFORM)
 
-    # --- Load the data ---
-    dataset = MALDI_multisamples(
-        features=PEAKS_PATH,
-        targets=PIXELS_PATH,
-        target=TARGET,
-        target_transform=target_transform,
-        excluded_slides=EXCLUDED_SLIDES
+    # Load Data
+    print("Loading data...")
+    peaks = pd.read_pickle(PEAKS_PATH)
+    pixels = pd.read_pickle(PIXELS_PATH)
+
+    # Clean the data by dropping excluded slides
+    if EXCLUDED_SLIDES:
+        print(f"Dropping excluded slides...")
+        mask = ~pixels['run'].isin(EXCLUDED_SLIDES)
+        peaks = peaks[mask].reset_index(drop=True)
+        pixels = pixels[mask].reset_index(drop=True)
+
+    # Pass cleaned arrays/DataFrames to the dataset
+    dataset = TableDataset(
+        features=peaks.values,
+        target=pixels[TARGET].values,
+        target_transform=target_transform
     )
-    data_tensor = dataset.features  # Example: use the features for prediction
-    print(f"Data tensor shape: {data_tensor.shape}")
-    print("Data tensor loaded.")
 
     # --- Load the model ---
     input_dim = dataset.n_features
@@ -94,7 +104,7 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
-    predictions = predict(model, data_tensor, device, batch_size=BATCH_SIZE)
+    predictions = predict(model, dataset.features, device, batch_size=BATCH_SIZE)
     print("Predictions are done.")
     print(f"Predictions shape: {predictions.shape}")
 
