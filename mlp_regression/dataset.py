@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import Dataset
+import numpy as np
 
 class TableDataset(Dataset):
     """
@@ -56,19 +57,13 @@ class TableDataset(Dataset):
 # Example usage (optional, for testing this file directly)
 if __name__ == '__main__':
 
-    # --- Configuration ---
-    PATH = "data/MALDI_IHC/correlations/"
-    PEAKS_PATH = f"{PATH}peaks_standardized_lesion.pkl"
-    PIXELS_PATH = f"{PATH}pixels_filtered_lesion.pkl"
-    TARGET = 'Density_CD8'
+    # Create a small dataset for testing
+    features = np.random.rand(10, 5)  # 10 samples, 5 features
+    target = np.random.rand(10)        # 10 target values
 
-    # Example: Load the dataset
-    dataset = MALDI_multisamples(peaks=PEAKS_PATH, pixels=PIXELS_PATH, target=TARGET)
-    print("Dataset loaded.")
-    print(f"Number of samples: {len(dataset)}")
-    print(f"Number of features: {dataset.n_features}")
+    # Create the dataset
+    dataset = TableDataset(features, target)
 
-    # Example: Get the first sample
-    first_features, first_target = dataset[0]
-    print(f"First sample features: {first_features}")
-    print(f"First sample target: {first_target}")
+    # Print dataset length and first item
+    print(f"Dataset length: {len(dataset)}")
+    print("First item (features, target):", dataset[0])

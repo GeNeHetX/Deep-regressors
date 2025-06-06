@@ -7,13 +7,15 @@ import os  # For checking if model file exists
 import yaml
 import numpy as np
 import pandas as pd
+from sklearn.decomposition import PCA
+import joblib
 
 # Import custom modules
 from dataset import TableDataset
 from model import MLPRegression
 from train import train_model
 from inference import predict
-from utils import get_target_transform, get_inverse_transform
+from utils import get_target_transform, get_inverse_transform, perform_pca
 
 # --- Configuration ---
 # Load configuration from YAML file
@@ -46,9 +48,12 @@ MIN_DELTA = config.get('min_delta')
 HIDDEN_DIM = config.get('hidden_dim')
 NUM_HIDDEN_LAYERS = config.get('num_hidden_layers')
 DROPOUT = config.get('dropout')
-MODEL_SAVE_PATH = f'results/models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{HUBER_DELTA}.pth'
-PLOT_LOSS_PATH = f'results/figures/MLP_regression_loss_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{HUBER_DELTA}.png'
+PCA_N_COMPONENT = config.get('pca_n_component')
+PCA_MODEL_PATH = f"results/models/pca_{PCA_N_COMPONENT}.joblib" if PCA_N_COMPONENT else None
+MODEL_SAVE_PATH = f'results/models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{PCA_N_COMPONENT}.pth'
+PLOT_LOSS_PATH = f'results/figures/MLP_regression_loss_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{PCA_N_COMPONENT}.png'
 TARGET_TRANSFORM = config.get('target_transform', 'sqrt')  # e.g., 'sqrt', 'log', or 'none'
+
 
 # Define target transformation functions
 target_transform = get_target_transform(TARGET_TRANSFORM)
@@ -70,10 +75,18 @@ if EXCLUDED_SLIDES:
     peaks = peaks[mask].reset_index(drop=True)
     pixels = pixels[mask].reset_index(drop=True)
 
+# Perform PCA
+if PCA_N_COMPONENT is not None:
+    print(f"Applying PCA with n_components={PCA_N_COMPONENT} to features...")
+    features_for_dataset = perform_pca(peaks.values, PCA_N_COMPONENT, PCA_MODEL_PATH)
+else:
+    print("No dimensional reduction applied, using original features.")
+    features_for_dataset = peaks.values
+
 # Pass cleaned arrays/DataFrames to the dataset
 print("Creating dataset...")
 dataset = TableDataset(
-    features=peaks.values,
+    features=features_for_dataset,
     target=pixels[TARGET].values,
     target_transform=target_transform
 )
@@ -152,7 +165,6 @@ if os.path.exists(MODEL_SAVE_PATH):
 
     # Prepare some sample data for inference (e.g., the first 3 samples from the dataset)
     sample_features, _ = dataset[0:3]  # Get features for first 3 samples
-    print(f"\nSample features for prediction:\n{sample_features}")
 
     # Make predictions
     predictions = predict(inference_model, sample_features, device)
