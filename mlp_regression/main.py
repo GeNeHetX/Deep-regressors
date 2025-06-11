@@ -15,7 +15,7 @@ from dataset import TableDataset
 from model import MLPRegression
 from train import train_model
 from inference import predict
-from utils import get_target_transform, get_inverse_transform, perform_pca
+from utils import get_target_transform, get_inverse_transform, perform_dim_reduction
 
 # --- Configuration ---
 # Load configuration from YAML file
@@ -48,12 +48,18 @@ MIN_DELTA = config.get('min_delta')
 HIDDEN_DIM = config.get('hidden_dim')
 NUM_HIDDEN_LAYERS = config.get('num_hidden_layers')
 DROPOUT = config.get('dropout')
-PCA_N_COMPONENT = config.get('pca_n_component')
-PCA_MODEL_PATH = f"results/models/pca_{PCA_N_COMPONENT}.joblib" if PCA_N_COMPONENT else None
-MODEL_SAVE_PATH = f'results/models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{PCA_N_COMPONENT}.pth'
-PLOT_LOSS_PATH = f'results/figures/MLP_regression_loss_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{PCA_N_COMPONENT}.png'
-TARGET_TRANSFORM = config.get('target_transform', 'sqrt')  # e.g., 'sqrt', 'log', or 'none'
 
+TARGET_TRANSFORM = config.get('target_transform')
+
+# Dimensionality Reduction Hyperparameters
+REDUCTION_METHOD = config.get('reduction_method')
+REDUCTION_N_COMPONENT = config.get('reduction_n_component')
+
+
+MODEL_SUFFIX = f"{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}"
+MODEL_SAVE_PATH = f'results/models/MLP_regression_{MODEL_SUFFIX}.pth'
+PLOT_LOSS_PATH = f'results/figures/MLP_regression_loss_{MODEL_SUFFIX}.png'
+MODEL_BASE_PATH = f"results/models/{REDUCTION_N_COMPONENT}"
 
 # Define target transformation functions
 target_transform = get_target_transform(TARGET_TRANSFORM)
@@ -75,10 +81,15 @@ if EXCLUDED_SLIDES:
     peaks = peaks[mask].reset_index(drop=True)
     pixels = pixels[mask].reset_index(drop=True)
 
-# Perform PCA
-if PCA_N_COMPONENT is not None:
-    print(f"Applying PCA with n_components={PCA_N_COMPONENT} to features...")
-    features_for_dataset = perform_pca(peaks.values, PCA_N_COMPONENT, PCA_MODEL_PATH)
+# Perform dimensionality reduction
+if REDUCTION_N_COMPONENT is not None:
+    print(f"Applying {REDUCTION_METHOD.upper()} with n_components={REDUCTION_N_COMPONENT} to features...")
+    features_for_dataset = perform_dim_reduction(
+        features=peaks.values,
+        n_components=REDUCTION_N_COMPONENT,
+        model_base_path=MODEL_BASE_PATH,
+        method=REDUCTION_METHOD
+    )
 else:
     print("No dimensional reduction applied, using original features.")
     features_for_dataset = peaks.values

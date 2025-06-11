@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, FastICA
 import joblib
 import os
 
@@ -24,41 +24,109 @@ def get_inverse_transform(transform_name):
     else:
         raise ValueError(f"Unknown target_transform: {transform_name}")
 
-def perform_pca(features: np.ndarray, n_components, pca_model_path: str=None, random_state: int=42) -> np.ndarray:
+def perform_pca(features: np.ndarray, n_components, model_base_path: str=None, random_state: int=42) -> np.ndarray:
     """
     Fit PCA on features, transform them, and save the PCA model.
 
     Args:
         features (np.ndarray): Feature matrix.
         n_components (int): Number of PCA components.
-        pca_model_path (str): Path to save the PCA model.
+        model_base_path (str): Base path to save the PCA model.
         random_state (int): Random state for reproducibility.
 
     Returns:
         np.ndarray: Transformed principal components.
     """
+    model_path = f"{model_base_path}_pca.joblib"
     # Check if the model exists and load it if available or fit a new one
-    if pca_model_path is not None and os.path.exists(pca_model_path):
+    if os.path.exists(model_path):
         # Load the existing PCA model
-        print(f"PCA model already exists at {pca_model_path}. Loading the model.")
-        pca = joblib.load(pca_model_path)
+        print(f"PCA model already exists at {model_path}. Loading the model.")
+        pca = joblib.load(model_path)
     else:
         # Fit a new PCA model
         print("Fitting PCA model...")
         pca = PCA(n_components=n_components, random_state=random_state)
         pca.fit(features)
 
-        # Save the PCA model if a path is provided
-        joblib.dump(pca, pca_model_path)
-        print(f"PCA model saved to {pca_model_path}.")
+        # Save the PCA model
+        joblib.dump(pca, model_path)
+        print(f"PCA model saved to {model_path}.")
 
-    # Transform the features using the fitted PCA model
+    # Transform the features using the PCA model
     features_pca = pca.transform(features)
 
     # Calculate explained variance ratio
-    explained_variance = pca.explained_variance_ratio_
-    total_explained_variance = np.sum(explained_variance)
+    total_explained_variance = np.sum(pca.explained_variance_ratio_)
     print(f"Total explained variance by {n_components} components: {total_explained_variance:.6f}")
-    print(f"Explained variance by PCA components: {np.round(explained_variance, 6)}")
 
     return features_pca
+
+def perform_ica(
+    features: np.ndarray,
+    n_components,
+    model_base_path: str,
+    random_state: int = 42
+) -> np.ndarray:
+    """
+    Always perform PCA before ICA, save both models using a common base path.
+
+    Args:
+        features (np.ndarray): Feature matrix.
+        n_components (int): Number of components for both PCA and ICA.
+        model_base_path (str): Base path for saving/loading models (without extension).
+        random_state (int): Random state for reproducibility.
+
+    Returns:
+        np.ndarray: Transformed independent components.
+    """
+
+    print(f"Applying PCA to reduce features to {n_components} components before ICA...")
+    features_pca = perform_pca(features, n_components, model_base_path, random_state)
+
+    ica_model_path = f"{model_base_path}_ica.joblib"
+    # Check if the ICA model exists and load it if available or fit a new one
+    if os.path.exists(ica_model_path):
+        print(f"ICA model already exists at {ica_model_path}. Loading the model.")
+        ica = joblib.load(ica_model_path)
+    else:
+        # Fit a new ICA model
+        print("Fitting ICA model...")
+        ica = FastICA(n_components=n_components, random_state=random_state, max_iter=1000)
+        ica.fit(features_pca)
+
+        # Save the ICA model
+        joblib.dump(ica, ica_model_path)
+        print(f"ICA model saved to {ica_model_path}.")
+
+    # Transform the features using the ICA model
+    features_ica = ica.transform(features_pca)
+    
+    return features_ica
+
+def perform_dim_reduction(
+    features: np.ndarray,
+    n_components: int,
+    model_base_path: str,
+    method: str = "pca",
+    random_state: int = 42
+) -> np.ndarray:
+    """
+    Perform dimensionality reduction using PCA or ICA (always with PCA first for ICA).
+
+    Args:
+        features (np.ndarray): Feature matrix.
+        n_components (int): Number of components for both PCA and ICA.
+        model_base_path (str): Base path for saving/loading models (without extension).
+        method (str): 'pca' or 'ica'.
+        random_state (int): Random state for reproducibility.
+
+    Returns:
+        np.ndarray: Transformed features.
+    """
+    if method == "pca":
+        return perform_pca(features, n_components, model_base_path, random_state)
+    elif method == "ica":
+        return perform_ica(features, n_components, model_base_path, random_state)
+    else:
+        raise ValueError(f"Unknown dimensionality reduction method: {method}")

@@ -4,10 +4,11 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import yaml
+import joblib
 
 from dataset import TableDataset
 from model import MLPRegression
-from utils import get_target_transform, get_inverse_transform
+from utils import get_target_transform, get_inverse_transform, perform_dim_reduction
 
 
 def predict(model: nn.Module,
@@ -61,8 +62,15 @@ if __name__ == '__main__':
     DROPOUT = config.get('dropout')  # Dropout rate
     TARGET_TRANSFORM = config.get('target_transform')  # e.g., 'sqrt', 'log', or 'none'
 
-    MODEL_PATH = f'results/models/MLP_regression_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{HUBER_DELTA}.pth'  # Path to the saved model
-    PREDICTIONS_PATH = f'results/predictions/predictions_mlp_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{HUBER_DELTA}.npy'
+    # Dimensionality Reduction Hyperparameters
+    REDUCTION_METHOD = config.get('reduction_method')
+    REDUCTION_N_COMPONENT = config.get('reduction_n_component')
+
+
+    MODEL_SUFFIX = f"{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}"
+    MODEL_PATH = f'results/models/MLP_regression_{MODEL_SUFFIX}.pth'
+    MODEL_BASE_PATH = f"results/models/{REDUCTION_N_COMPONENT}"
+    PREDICTIONS_PATH = f'results/predictions/predictions_mlp_{MODEL_SUFFIX}.npy'
 
     # Define target transformation functions
     target_transform = get_target_transform(TARGET_TRANSFORM)
@@ -80,9 +88,23 @@ if __name__ == '__main__':
         peaks = peaks[mask].reset_index(drop=True)
         pixels = pixels[mask].reset_index(drop=True)
 
+    # Perform dimensionality reduction
+    if REDUCTION_N_COMPONENT is not None:
+        print(f"Applying {REDUCTION_METHOD.upper()} with n_components={REDUCTION_N_COMPONENT} to features...")
+        peaks = perform_dim_reduction(
+            features=peaks.values,
+            n_components=REDUCTION_N_COMPONENT,
+            model_base_path=MODEL_BASE_PATH,
+            method=REDUCTION_METHOD
+        )
+    else:
+        print("Skipping dimensionality reduction.")
+        peaks = peaks.values
+
     # Pass cleaned arrays/DataFrames to the dataset
+    print("Creating dataset...")
     dataset = TableDataset(
-        features=peaks.values,
+        features=peaks,
         target=pixels[TARGET].values,
         target_transform=target_transform
     )
@@ -92,6 +114,7 @@ if __name__ == '__main__':
     output_dim = 1 
 
     # Load the model
+    print("Loading the model...")
     model = MLPRegression(input_dim=input_dim,
                           output_dim=output_dim,
                           hidden_dim=HIDDEN_DIM,
@@ -103,7 +126,7 @@ if __name__ == '__main__':
     # --- Make predictions ---
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
-
+    print("Making predictions...")
     predictions = predict(model, dataset.features, device, batch_size=BATCH_SIZE)
     print("Predictions are done.")
     print(f"Predictions shape: {predictions.shape}")
