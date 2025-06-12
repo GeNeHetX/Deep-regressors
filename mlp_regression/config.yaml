@@ -32,10 +32,11 @@ patience: 30
 min_delta: 0.000001
 
 # Model configuration
-hidden_dim: 256
+hidden_dim: 512
 num_hidden_layers: 3
+architecture_factor: 0.5  # 1 = Uniform, < 1 = Funnel, > 1 = Expanding
 dropout: 0.2
-reduction_n_component: 128
+reduction_n_component: 256
 reduction_method: ica   # options: pca, ica
 
 # Inference configuration
