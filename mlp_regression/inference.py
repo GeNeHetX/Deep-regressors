@@ -59,6 +59,7 @@ if __name__ == '__main__':
     # MLP Hyperparameters
     HIDDEN_DIM = config.get('hidden_dim')  # Number of neurons in hidden layers
     NUM_HIDDEN_LAYERS = config.get('num_hidden_layers')  # Number of hidden layers
+    ARCHITECTURE_FACTOR = config.get('architecture_factor') # Factor to adjust hidden layer sizes (1 = Uniform, < 1 = Funnel, > 1 = Expanding)
     DROPOUT = config.get('dropout')  # Dropout rate
     TARGET_TRANSFORM = config.get('target_transform')  # e.g., 'sqrt', 'log', or 'none'
 
@@ -67,7 +68,7 @@ if __name__ == '__main__':
     REDUCTION_N_COMPONENT = config.get('reduction_n_component')
 
 
-    MODEL_SUFFIX = f"{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}"
+    MODEL_SUFFIX = f"{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{ARCHITECTURE_FACTOR}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}"
     MODEL_PATH = f'results/models/MLP_regression_{MODEL_SUFFIX}.pth'
     MODEL_BASE_PATH = f"results/models/{REDUCTION_N_COMPONENT}"
     PREDICTIONS_PATH = f'results/predictions/predictions_mlp_{MODEL_SUFFIX}.npy'
@@ -115,11 +116,15 @@ if __name__ == '__main__':
 
     # Load the model
     print("Loading the model...")
-    model = MLPRegression(input_dim=input_dim,
-                          output_dim=output_dim,
-                          hidden_dim=HIDDEN_DIM,
-                          num_hidden_layers=NUM_HIDDEN_LAYERS,
-                          dropout=DROPOUT)
+    model = MLPRegression(
+        input_dim=input_dim,
+        output_dim=output_dim,
+        hidden_dim=HIDDEN_DIM,
+        num_hidden_layers=NUM_HIDDEN_LAYERS,
+        architecture_factor=ARCHITECTURE_FACTOR,
+        dropout=DROPOUT
+    )
+    print(model)
     
     model.load_state_dict(torch.load(MODEL_PATH))
     
