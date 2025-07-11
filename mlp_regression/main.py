@@ -4,9 +4,8 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torch.optim.lr_scheduler import OneCycleLR
 import yaml
+import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
-import joblib
 
 # Import custom modules
 from dataset import TableDataset
@@ -77,6 +76,15 @@ if EXCLUDED_SLIDES:
     mask = ~pixels['run'].isin(EXCLUDED_SLIDES)
     peaks = peaks[mask].reset_index(drop=True)
     pixels = pixels[mask].reset_index(drop=True)
+
+# Drop the peaks that are in the trypsin peptide masses with tolerance 0.2
+with open("trypsin_peaks.yaml", "r") as f:
+    trypsin_peaks = yaml.safe_load(f)
+
+for col in peaks.columns:
+    if np.min(np.abs(float(col) - np.array(trypsin_peaks))) < 0.2:
+        print(f"Dropping {col}")
+        peaks.drop(col, axis=1, inplace=True)
 
 # Perform dimensionality reduction
 if REDUCTION_N_COMPONENT is not None:
