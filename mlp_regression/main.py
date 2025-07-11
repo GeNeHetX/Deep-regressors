@@ -5,6 +5,8 @@ from torch.utils.data import DataLoader, random_split
 from torch.optim.lr_scheduler import OneCycleLR
 import yaml
 import pandas as pd
+from sklearn.preprocessing import StandardScaler
+import joblib
 
 # Import custom modules
 from dataset import TableDataset
@@ -80,14 +82,14 @@ if EXCLUDED_SLIDES:
 if REDUCTION_N_COMPONENT is not None:
     print(f"Applying {REDUCTION_METHOD.upper()} with n_components={REDUCTION_N_COMPONENT} to features...")
     features_for_dataset = perform_dim_reduction(
-        features=peaks.values,
+        features=peaks,
         n_components=REDUCTION_N_COMPONENT,
         model_base_path=MODEL_BASE_PATH,
         method=REDUCTION_METHOD
     )
 else:
-    print("No dimensional reduction applied, using original features.")
-    features_for_dataset = peaks.values
+    print("No dimensional reduction applied, using standardized features.")
+    features_for_dataset = peaks
 
 # Pass cleaned arrays/DataFrames to the dataset
 print("Creating dataset...")

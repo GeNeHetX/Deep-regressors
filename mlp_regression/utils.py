@@ -1,6 +1,7 @@
 import torch
 import numpy as np
-from sklearn.decomposition import PCA, FastICA
+from scipy.sparse import csr_matrix
+from sklearn.decomposition import PCA, FastICA, TruncatedSVD
 import joblib
 import os
 
@@ -14,6 +15,7 @@ def get_target_transform(transform_name):
     else:
         raise ValueError(f"Unknown target_transform: {transform_name}")
 
+
 def get_inverse_transform(transform_name):
     if transform_name == 'sqrt':
         return lambda x: np.asarray(x, dtype=np.float64) ** 2
@@ -23,6 +25,7 @@ def get_inverse_transform(transform_name):
         return lambda x: np.asarray(x, dtype=np.float64)
     else:
         raise ValueError(f"Unknown target_transform: {transform_name}")
+
 
 def perform_pca(features: np.ndarray, n_components, model_base_path: str=None, random_state: int=42) -> np.ndarray:
     """
@@ -58,9 +61,10 @@ def perform_pca(features: np.ndarray, n_components, model_base_path: str=None, r
 
     # Calculate explained variance ratio
     total_explained_variance = np.sum(pca.explained_variance_ratio_)
-    print(f"Total explained variance by {n_components} components: {total_explained_variance:.6f}")
+    print(f"Total explained variance by {n_components} components: {total_explained_variance:.4f}")
 
     return features_pca
+
 
 def perform_ica(
     features: np.ndarray,
@@ -104,6 +108,45 @@ def perform_ica(
     
     return features_ica
 
+
+def perform_svd(
+    features: np.ndarray,
+    n_components: int,
+    model_base_path: str,
+    random_state: int = 42
+) -> np.ndarray:
+    """
+    Perform SVD on the features and save the model.
+
+    Args:
+        features (np.ndarray): Feature matrix.
+        n_components (int): Number of components for SVD.
+        model_base_path (str): Base path for saving/loading models (without extension).
+        random_state (int): Random state for reproducibility.
+
+    Returns:
+        np.ndarray: Transformed features after SVD.
+    """
+    svd_model_path = f"{model_base_path}_svd.joblib"
+    if os.path.exists(svd_model_path):
+        print(f"SVD model already exists at {svd_model_path}. Loading the model.")
+        svd = joblib.load(svd_model_path)
+    else:
+        print("Fitting SVD model...")
+        svd = TruncatedSVD(n_components=n_components, random_state=random_state)
+        svd.fit(features)
+
+        # Inspect the explained variance
+        explained_variance = svd.explained_variance_ratio_.sum()
+        print(f"Total explained variance by {n_components} components: {explained_variance:.4f}")
+
+        joblib.dump(svd, svd_model_path)
+        print(f"SVD model saved to {svd_model_path}.")
+
+    features_svd = svd.transform(features)
+    
+    return features_svd
+
 def perform_dim_reduction(
     features: np.ndarray,
     n_components: int,
@@ -128,5 +171,7 @@ def perform_dim_reduction(
         return perform_pca(features, n_components, model_base_path, random_state)
     elif method == "ica":
         return perform_ica(features, n_components, model_base_path, random_state)
+    elif method == "svd":
+        return perform_svd(csr_matrix(features), n_components, model_base_path, random_state)
     else:
         raise ValueError(f"Unknown dimensionality reduction method: {method}")

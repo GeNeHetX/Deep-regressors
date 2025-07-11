@@ -1,20 +1,20 @@
 # Data configuration
-path_to_data: data/MALDI_IHC/correlations
-peaks_path: data/MALDI_IHC/correlations/peaks_standardized_lesion.pkl
-pixels_path: data/MALDI_IHC/correlations/pixels_filtered_lesion.pkl
+path_to_data: data/MALDI_IHC/aligned_peaks
+peaks_path: data/MALDI_IHC/aligned_peaks/peaks.pkl
+pixels_path: data/MALDI_IHC/aligned_peaks/pixels.pkl
 target: Density_CD8
 target_transform: sqrt  # options: sqrt, log, none
-excluded_slides:
-  - 13AG03225-06
-  - 13AG06573-10
-  - 544085-14
-  - 546332-17
-  - 549724-18
-  - 549724-19
-  - 549764-29
-  - 549857-19
-  - 549857-22
-  - 552138-25
+# excluded_slides:
+#   - 13AG03225-06
+#   - 13AG06573-10
+#   - 544085-14
+#   - 546332-17
+#   - 549724-18
+#   - 549724-19
+#   - 549764-29
+#   - 549857-19
+#   - 549857-22
+#   - 552138-25
 
 # Training configuration
 batch_size: 1024
@@ -32,16 +32,16 @@ patience: 30
 min_delta: 0.000001
 
 # Model configuration
-hidden_dim: 512
+hidden_dim: 1024
 num_hidden_layers: 3
 architecture_factor: 0.5  # 1 = Uniform, < 1 = Funnel, > 1 = Expanding
 dropout: 0.2
-reduction_n_component: 256
-reduction_method: ica   # options: pca, ica
+reduction_n_component: 512
+reduction_method: svd   # options: pca, ica, svd
 
 # Inference configuration
-path_to_data_inference: data/MALDI_IHC/correlations
-peaks_path_inference: data/MALDI_IHC/correlations/peaks_standardized.pkl
-pixels_path_inference: data/MALDI_IHC/correlations/pixels_filtered.pkl
+path_to_data_inference: data/MALDI_IHC/aligned_peaks
+peaks_path_inference: data/MALDI_IHC/aligned_peaks/peaks.pkl
+pixels_path_inference: data/MALDI_IHC/aligned_peaks/pixels.pkl
 target_inference: Density_CD8
 batch_size_inference: 100000
