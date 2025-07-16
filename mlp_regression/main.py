@@ -3,9 +3,12 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torch.optim.lr_scheduler import OneCycleLR
+from sklearn.preprocessing import StandardScaler
+import joblib
 import yaml
 import numpy as np
 import pandas as pd
+import os
 
 # Import custom modules
 from dataset import TableDataset
@@ -85,6 +88,15 @@ for col in peaks.columns:
     if np.min(np.abs(float(col) - np.array(trypsin_peaks))) < 0.2:
         print(f"Dropping {col}")
         peaks.drop(col, axis=1, inplace=True)
+
+# Scale the features without centering
+print("Scaling features...")
+scaler = StandardScaler(with_mean=False)  # initialize scaler without centering
+scaler.fit(peaks.values)  # fit the scaler on the features
+peaks = pd.DataFrame(scaler.transform(peaks.values), columns=peaks.columns)  # scale the features and convert it back to DataFrame
+
+# Save the scaler model
+joblib.dump(scaler, f"{MODEL_SUFFIX}_scaler.joblib")
 
 # Perform dimensionality reduction
 if REDUCTION_N_COMPONENT is not None:
