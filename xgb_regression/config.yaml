@@ -1,0 +1,44 @@
+# Data configuration
+path_to_data: data/MALDI_IHC/aligned_peaks
+peaks_path: data/MALDI_IHC/aligned_peaks/peaks.pkl
+pixels_path: data/MALDI_IHC/aligned_peaks/pixels.pkl
+target: Density_CD8
+target_transform: sqrt  # options: sqrt, log, none
+target_threshold: 0.03
+excluded_slides:
+  - 13AG03225-06
+  - 13AG06573-10
+  - 544085-14
+  - 546332-17
+  - 549724-18
+  - 549724-19
+  - 549764-29
+  - 549857-19
+  - 549857-22
+  - 552138-25
+
+# Training configuration
+validation_split: 0.1
+
+# Optimization configuration
+num_boost_rounds: 1000
+huber_delta: 0.01
+learning_rate: 0.1
+alpha: 100
+early_stopping_rounds: 10
+
+# Model configuration
+objective: reg:squarederror
+max_depth: 12
+colsample_bytree: 0.8
+reduction_n_component: 512
+reduction_method: svd   # options: pca, ica, svd
+
+# Inference configuration
+path_to_data_inference: data/MALDI_IHC/aligned_peaks
+peaks_path_inference: data/MALDI_IHC/aligned_peaks/peaks.pkl
+pixels_path_inference: data/MALDI_IHC/aligned_peaks/pixels.pkl
+target_inference: Density_CD8
+
+# Device configuration
+device: "cpu" 

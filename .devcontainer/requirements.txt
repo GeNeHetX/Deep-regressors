@@ -7,5 +7,6 @@ seaborn
 scikit-learn
 scikit-image
 imagecodecs
+xgboost
 jupyter
 ipywidgets
