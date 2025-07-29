@@ -4,11 +4,13 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torch.optim.lr_scheduler import OneCycleLR
 from sklearn.preprocessing import StandardScaler
+from tqdm import tqdm
 import joblib
 import yaml
 import numpy as np
 import pandas as pd
 import os
+import gc
 
 # Import custom modules
 from dataset import TableDataset
@@ -49,13 +51,15 @@ ARCHITECTURE_FACTOR = config.get('architecture_factor')
 DROPOUT = config.get('dropout')
 
 TARGET_TRANSFORM = config.get('target_transform')
+FEATURES_TRANSFORM = config.get('features_transform')
 
 # Dimensionality Reduction Hyperparameters
 REDUCTION_METHOD = config.get('reduction_method')
 REDUCTION_N_COMPONENT = config.get('reduction_n_component')
+ICA = config.get('ica', False)  # Check if ICA is enabled
 
 
-MODEL_SUFFIX = f"{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{ARCHITECTURE_FACTOR}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}"
+MODEL_SUFFIX = f"{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{ARCHITECTURE_FACTOR}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}{'_ica' if ICA else ''}_{HUBER_DELTA}_{LEARNING_RATE}_{MAX_LR}_{WEIGHT_DECAY}"
 MODEL_SAVE_PATH = f'results/models/MLP_regression_{MODEL_SUFFIX}.pth'
 PLOT_LOSS_PATH = f'results/figures/MLP_regression_loss_{MODEL_SUFFIX}.png'
 MODEL_BASE_PATH = f"results/models/{REDUCTION_N_COMPONENT}"
@@ -80,6 +84,10 @@ if EXCLUDED_SLIDES:
     peaks = peaks[mask].reset_index(drop=True)
     pixels = pixels[mask].reset_index(drop=True)
 
+# Extract unique slides and their count
+slides = pixels['run'].unique()
+n_slides = len(slides)
+
 # Drop the peaks that are in the trypsin peptide masses with tolerance 0.2
 with open("trypsin_peaks.yaml", "r") as f:
     trypsin_peaks = yaml.safe_load(f)
@@ -91,12 +99,35 @@ for col in peaks.columns:
 
 # Scale the features without centering
 print("Scaling features...")
-scaler = StandardScaler(with_mean=False)  # initialize scaler without centering
-scaler.fit(peaks.values)  # fit the scaler on the features
-peaks = pd.DataFrame(scaler.transform(peaks.values), columns=peaks.columns)  # scale the features and convert it back to DataFrame
+for slide in tqdm(slides, desc="Processing slides"):
+    # Initialize scaler with centering
+    scaler = StandardScaler(with_mean=False, with_std=True)
 
-# Save the scaler model
-joblib.dump(scaler, f"{MODEL_SUFFIX}_scaler.joblib")
+    # Fit the scaler on the features
+    scaler.fit(peaks.loc[pixels['run'] == slide].values)
+
+    # Transform the features
+    peaks.loc[pixels['run'] == slide] = scaler.transform(peaks.loc[pixels['run'] == slide].values)
+
+    # Save the scaler
+    joblib.dump(scaler, f"results/models/scalers/scaler_{slide}.joblib")
+
+# Count the nan values in the peaks dataframe
+n_nan = peaks.isna().sum().sum()
+print(f"Number of NaN values in the peaks dataframe: {n_nan}")
+
+# Drop the rows with NaN values
+peaks.dropna(axis=0, inplace=True)
+pixels = pixels.loc[peaks.index]
+
+# reset the index of the peaks dataframe
+peaks.reset_index(drop=True, inplace=True)
+pixels.reset_index(drop=True, inplace=True)
+
+# Transform the peaks logarithmically
+if FEATURES_TRANSFORM == 'log1p':
+    print("Applying logarithmic transformation to peaks...")
+    peaks = np.log1p(peaks)
 
 # Perform dimensionality reduction
 if REDUCTION_N_COMPONENT is not None:
@@ -105,7 +136,9 @@ if REDUCTION_N_COMPONENT is not None:
         features=peaks,
         n_components=REDUCTION_N_COMPONENT,
         model_base_path=MODEL_BASE_PATH,
-        method=REDUCTION_METHOD
+        method=REDUCTION_METHOD,
+        ica=ICA,
+        random_state=42
     )
 else:
     print("No dimensional reduction applied, using standardized features.")
@@ -118,6 +151,10 @@ dataset = TableDataset(
     target=pixels[TARGET].values,
     target_transform=target_transform
 )
+
+# Clear memory
+del peaks, pixels, features_for_dataset
+gc.collect()
 
 # Split dataset into training and validation sets
 print("Splitting dataset into training and validation sets...")
