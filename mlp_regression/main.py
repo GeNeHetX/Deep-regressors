@@ -50,6 +50,7 @@ NUM_HIDDEN_LAYERS = config.get('num_hidden_layers')
 ARCHITECTURE_FACTOR = config.get('architecture_factor')
 DROPOUT = config.get('dropout')
 
+# Target and Features Transformations
 TARGET_TRANSFORM = config.get('target_transform')
 FEATURES_TRANSFORM = config.get('features_transform')
 
@@ -58,7 +59,7 @@ REDUCTION_METHOD = config.get('reduction_method')
 REDUCTION_N_COMPONENT = config.get('reduction_n_component')
 ICA = config.get('ica', False)  # Check if ICA is enabled
 
-
+# Define model suffix and paths
 MODEL_SUFFIX = f"{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{ARCHITECTURE_FACTOR}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}{'_ica' if ICA else ''}_{HUBER_DELTA}_{LEARNING_RATE}_{MAX_LR}_{WEIGHT_DECAY}"
 MODEL_SAVE_PATH = f'results/models/MLP_regression_{MODEL_SUFFIX}.pth'
 PLOT_LOSS_PATH = f'results/figures/MLP_regression_loss_{MODEL_SUFFIX}.png'
@@ -100,7 +101,7 @@ for col in peaks.columns:
 # Scale the features without centering
 print("Scaling features...")
 for slide in tqdm(slides, desc="Processing slides"):
-    # Initialize scaler with centering
+    # Initialize scaler without centering
     scaler = StandardScaler(with_mean=False, with_std=True)
 
     # Fit the scaler on the features
