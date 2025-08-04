@@ -114,15 +114,6 @@ if __name__ == '__main__':
     slides = pixels['run'].unique()
     n_slides = len(slides)
 
-    # Drop the peaks that are in the trypsin peptide masses with tolerance 0.2
-    with open("trypsin_peaks.yaml", "r") as f:
-        trypsin_peaks = yaml.safe_load(f)
-
-    for col in peaks.columns:
-        if np.min(np.abs(float(col) - np.array(trypsin_peaks))) < 0.2:
-            print(f"Dropping {col}")
-            peaks.drop(col, axis=1, inplace=True)
-
     # Scale the features without centering
     print("Scaling features...")
     for slide in tqdm(slides, desc="Processing slides"):
@@ -207,7 +198,8 @@ if __name__ == '__main__':
     print(f"Predictions shape: {predictions.shape}")
 
     # Inverse transform predictions
-    predictions = inverse_transform(predictions)
+    print(f"Applying inverse transformation to predictions using {TARGET_TRANSFORM}...")
+    predictions = target_transform(predictions)
 
     # Save predictions
     pixels[f'Predicted_{TARGET}'] = predictions
