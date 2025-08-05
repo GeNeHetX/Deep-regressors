@@ -87,7 +87,6 @@ if __name__ == '__main__':
     # Define model suffix and paths
     MODEL_SUFFIX = f"{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{ARCHITECTURE_FACTOR}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}{'_ica' if ICA else ''}_{HUBER_DELTA}_{LEARNING_RATE}_{MAX_LR}_{WEIGHT_DECAY}"
     MODEL_PATH = f'results/models/MLP_regression_{MODEL_SUFFIX}.pth'
-    MODEL_BASE_PATH = f"results/models/{REDUCTION_N_COMPONENT}"
     PREDICTIONS_PATH = f'results/predictions/predictions_mlp_{MODEL_SUFFIX}.npy'
 
     # Define target transformation functions
@@ -144,17 +143,20 @@ if __name__ == '__main__':
         print("Applying logarithmic transformation to peaks...")
         peaks = np.log1p(peaks)
 
-    # Perform dimensionality reduction
+    # Perform dimensionality reduction by loading the model and applying it
     if REDUCTION_N_COMPONENT is not None:
-        print(f"Applying {REDUCTION_METHOD.upper()} with n_components={REDUCTION_N_COMPONENT} to features...")
-        features_for_dataset = perform_dim_reduction(
-            features=peaks,
-            n_components=REDUCTION_N_COMPONENT,
-            model_base_path=MODEL_BASE_PATH,
-            method=REDUCTION_METHOD,
-            ica=ICA,
-            random_state=42
-        )
+        print(f"Loading and applying dimensionality reduction model: {REDUCTION_METHOD.upper()} with n_components={REDUCTION_N_COMPONENT}{' + ICA' if ICA else ''}...")
+
+        model_reduction_path = f"results/models/{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}.joblib"
+        print(f"Loading dimensionality reduction model from {model_reduction_path}")
+        model_reduction = joblib.load(model_reduction_path)
+        features_for_dataset = model_reduction.transform(peaks)
+
+        if ICA:
+            ica_model_path = f"results/models/{REDUCTION_N_COMPONENT}_ica.joblib"
+            print(f"Loading ICA model from {ica_model_path}")
+            ica_model = joblib.load(ica_model_path)  
+            features_for_dataset = ica_model.transform(features_for_dataset)
     else:
         print("No dimensional reduction applied, using standardized features.")
         features_for_dataset = peaks
@@ -166,6 +168,8 @@ if __name__ == '__main__':
         target=pixels[TARGET].values,
         target_transform=target_transform
     )
+
+    print(f"Dataset created with {dataset.n_samples} samples and {dataset.n_features} features.")
 
     # Clear memory
     del peaks, features_for_dataset
@@ -190,8 +194,6 @@ if __name__ == '__main__':
     model.load_state_dict(torch.load(MODEL_PATH))
     
     # --- Make predictions ---
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Using device: {device}")
     print("Making predictions...")
     predictions = predict(model, dataset.features, device, batch_size=BATCH_SIZE)
     print("Predictions are done.")
@@ -199,7 +201,7 @@ if __name__ == '__main__':
 
     # Inverse transform predictions
     print(f"Applying inverse transformation to predictions using {TARGET_TRANSFORM}...")
-    predictions = target_transform(predictions)
+    predictions = inverse_transform(predictions)
 
     # Save predictions
     pixels[f'Predicted_{TARGET}'] = predictions

@@ -144,6 +144,8 @@ dataset = TableDataset(
     target_transform=target_transform
 )
 
+print(f"Dataset created with {dataset.n_samples} samples and {dataset.n_features} features.")
+
 # Clear memory
 del peaks, pixels, features_for_dataset
 gc.collect()
