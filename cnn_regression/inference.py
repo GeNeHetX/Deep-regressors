@@ -82,6 +82,9 @@ if __name__ == '__main__':
     MODEL_PATH = f'results/models/UNet_regression_{MODEL_SUFFIX}.pth'
     PREDICTIONS_PATH = f'results/predictions/predictions_unet_{MODEL_SUFFIX}.npy'
 
+    # UNet Hyperparameters
+    IMAGE_SIZE = config.get('image_size')
+
     # Define target transformation functions
     target_transform = get_target_transform(TARGET_TRANSFORM)
     inverse_transform = get_inverse_transform(TARGET_TRANSFORM)
@@ -184,15 +187,23 @@ if __name__ == '__main__':
             features=features_for_dataset,
             coordinates=pixels[['x', 'y']],
             samples_indices=pixels['run'].values,
-            target=pixels[TARGET].values
+            target=pixels[TARGET].values,
+            target_transform=target_transform,
+            img_size=IMAGE_SIZE
         )
 
         tqdm.write(f"Dataset created with {dataset.n_observations} samples and {dataset.n_features} features.")
 
-        # --- Make predictions ---
+        # Make predictions
         tqdm.write("Making predictions...")
-        sample_img, _, _ = dataset[0]
-        predictions = predict(model, sample_img, device, batch_size=BATCH_SIZE)
+        sample_img, label_img, padding_sequence = dataset[0]
+        prediction_img = predict(model, sample_img.unsqueeze(0), device, batch_size=BATCH_SIZE)[0]
+
+        # Remove the padding
+        prediction_img_clean = prediction_img[padding_sequence[2]:-padding_sequence[3], padding_sequence[0]:-padding_sequence[1]]
+
+        # Extract the predicted CD8 vector according to the xy coordinates
+        predictions = [prediction_img_clean[y, x] for x, y in zip(pixels['x'].astype(int), pixels['y'].astype(int))]
 
         # Inverse transform predictions
         tqdm.write(f"Applying inverse transformation to predictions using {TARGET_TRANSFORM}...")

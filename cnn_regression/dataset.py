@@ -44,7 +44,7 @@ class MSI_Image_Dataset(Dataset):
             idx (int): Index of the sample to retrieve.
 
         Returns:
-            tuple: (image tensor, label tensor, sample id)
+            tuple: (image tensor, label tensor, padding sequence) where padding_sequence is a tuple of (left, right, top, bottom) padding integer values.
         """
         # Extract the sample features and pixels
         sample = self.samples_ids[idx]
@@ -84,14 +84,20 @@ class MSI_Image_Dataset(Dataset):
         pad_height = self.target_height - img.shape[1]
         pad_width = self.target_width - img.shape[2]
         if pad_height > 0 or pad_width > 0:
+            # Compute padding for each side
             pad_top = pad_height // 2
             pad_bottom = pad_height - pad_top
             pad_left = pad_width // 2
             pad_right = pad_width - pad_left
-            img = F.pad(img, (pad_left, pad_right, pad_top, pad_bottom))
-            label_img = F.pad(label_img, (pad_left, pad_right, pad_top, pad_bottom))
 
-        return img, label_img, sample  # Optionally return sample id for reference
+            # Create padding sequences
+            padding_sequence = (pad_left, pad_right, pad_top, pad_bottom)
+
+            # Apply padding to the features and labels images
+            img = F.pad(img, padding_sequence)
+            label_img = F.pad(label_img, padding_sequence)
+
+        return img, label_img, padding_sequence
 
 # Example usage (optional, for testing this file directly)
 if __name__ == '__main__':

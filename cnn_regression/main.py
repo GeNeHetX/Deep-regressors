@@ -212,6 +212,6 @@ history = train_model(
 )
 print("Training completed.")
 
-# # Run inference.py script to generate predictions
-# print("Running inference...")
-# os.system(f"python mlp_regression/inference.py")
+# Run inference.py script to generate predictions
+print("Running inference...")
+os.system(f"python cnn_regression/inference.py")
