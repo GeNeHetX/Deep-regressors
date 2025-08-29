@@ -5,6 +5,7 @@ from torch.utils.data import DataLoader, random_split
 from torch.optim.lr_scheduler import OneCycleLR
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
+import segmentation_models_pytorch as smp
 import joblib
 import yaml
 import numpy as np
@@ -14,7 +15,6 @@ import gc
 
 # Import custom modules
 from dataset import MSI_Image_Dataset
-from model import UNet
 from train import train_model
 from utils import get_target_transform, get_inverse_transform, perform_dim_reduction
 
@@ -177,14 +177,19 @@ in_channels = dataset.n_features
 
 # Initialize Model, Loss and Optimizer
 print("Initializing model...")
-model = UNet(in_channels=in_channels)
+model = smp.Unet(
+            encoder_name="resnet34",  # Choose encoder architecture
+            encoder_weights=None,  # No pre-trained weights
+            in_channels=in_channels,
+            classes=1,  # Single output channel for regression
+        )
 print(model)
 
 # Loss Function (Huber Loss for regression)
 criterion = nn.HuberLoss(delta=HUBER_DELTA) 
 
 # Optimizer
-optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
 # OneCycleLR Scheduler
 scheduler = OneCycleLR(

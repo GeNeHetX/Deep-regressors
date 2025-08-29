@@ -41,7 +41,7 @@
     "mounts": [
         "source=/home/ahmed/Data,target=/workspaces/Deep-regressors/data,type=bind,consistency=cached",
         "source=/mnt/hdd/Data,target=/workspaces/Deep-regressors/data_hdd,type=bind,consistency=cached",
-        "source=/media/ahmed/6F7E-F5D4/new_lames,target=/workspaces/Deep-regressors/data_external,type=bind,consistency=cached",
+        "source=/media/ahmed/6F7E-F5D41/new_lames,target=/workspaces/Deep-regressors/data_external,type=bind,consistency=cached",
         "source=/home/ahmed/QP-projects,target=/workspaces/Deep-regressors/qp-projects,type=bind,consistency=cached"
     ]
 

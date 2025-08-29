@@ -72,7 +72,7 @@ class MSI_Image_Dataset(Dataset):
 
         # Transform the images arrays to tensors
         img = torch.from_numpy(img)
-        label_img = torch.from_numpy(label_img)
+        label_img = torch.from_numpy(label_img).unsqueeze(0)  # Add channel dimension
 
         # Apply any additional transformations
         if self.feature_transform:

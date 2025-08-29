@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
+FROM pytorch/pytorch:2.8.0-cuda12.9-cudnn9-runtime
 
 # Install basic utilities
 RUN apt-get update

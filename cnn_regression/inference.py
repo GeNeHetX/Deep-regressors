@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import segmentation_models_pytorch as smp
 import numpy as np
 import pandas as pd
 import yaml
@@ -11,7 +12,6 @@ from scipy.stats import pearsonr, spearmanr
 from tqdm import tqdm
 
 from dataset import MSI_Image_Dataset
-from model import UNet
 from utils import get_target_transform, get_inverse_transform
 
 import matplotlib.pyplot as plt
@@ -110,8 +110,12 @@ if __name__ == '__main__':
     in_channels = REDUCTION_N_COMPONENT
 
     print("Loading the model...")
-    model = UNet(in_channels=in_channels)
-    print(model)
+    model = smp.Unet(
+                encoder_name="resnet34",  # Choose encoder architecture
+                encoder_weights=None,  # No pre-trained weights
+                in_channels=in_channels,
+                classes=1,  # Single output channel for regression
+            )
     
     model.load_state_dict(torch.load(MODEL_PATH))
 
@@ -200,10 +204,10 @@ if __name__ == '__main__':
         prediction_img = predict(model, sample_img.unsqueeze(0), device, batch_size=BATCH_SIZE)[0]
 
         # Remove the padding
-        prediction_img_clean = prediction_img[padding_sequence[2]:-padding_sequence[3], padding_sequence[0]:-padding_sequence[1]]
+        prediction_img_clean = prediction_img[:, padding_sequence[2]:-padding_sequence[3], padding_sequence[0]:-padding_sequence[1]]
 
         # Extract the predicted CD8 vector according to the xy coordinates
-        predictions = [prediction_img_clean[y, x] for x, y in zip(pixels['x'].astype(int), pixels['y'].astype(int))]
+        predictions = [prediction_img_clean[0, y, x] for x, y in zip(pixels['x'].astype(int), pixels['y'].astype(int))]
 
         # Inverse transform predictions
         tqdm.write(f"Applying inverse transformation to predictions using {TARGET_TRANSFORM}...")

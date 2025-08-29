@@ -1,4 +1,5 @@
 timm
+segmentation-models-pytorch
 openslide-python
 openslide-bin
 pandas
