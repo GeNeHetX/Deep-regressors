@@ -158,6 +158,20 @@ print(f"Dataset created with {dataset.n_observations} samples and {dataset.n_fea
 del peaks, pixels, features_for_dataset
 gc.collect()
 
+# Split dataset into training and validation sets
+print("Splitting dataset into training and validation sets...")
+dataset_size = len(dataset)
+val_size = int(VALIDATION_SPLIT * dataset_size)
+train_size = dataset_size - val_size
+
+train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+
+# Create DataLoaders for training and validation
+train_loader = DataLoader(dataset=train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+val_loader = DataLoader(dataset=val_dataset, batch_size=BATCH_SIZE, shuffle=False)
+
+print(f"Training samples: {len(train_dataset)}, Validation samples: {len(val_dataset)}")
+
 # Get input and output channel dimensions from dataset
 in_channels = dataset.n_features
 
@@ -178,24 +192,21 @@ criterion = nn.HuberLoss(delta=HUBER_DELTA)
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
 # OneCycleLR Scheduler
-steps_per_epoch = int((1 - VALIDATION_SPLIT) * len(dataset) // BATCH_SIZE)
 scheduler = OneCycleLR(
     optimizer,
     max_lr=MAX_LR,
-    steps_per_epoch=steps_per_epoch,
+    steps_per_epoch=len(train_loader),
     epochs=NUM_EPOCHS
 )
-print(f"Scheduler: OneCycleLR with max_lr={MAX_LR}, steps_per_epoch={steps_per_epoch}, epochs={NUM_EPOCHS}")
 
 # Training
 print("Starting training...")
 history = train_model(
     model=model,
-    dataset=dataset,
+    train_loader=train_loader,
+    val_loader=val_loader,
     criterion=criterion,
     optimizer=optimizer,
-    validation_split=VALIDATION_SPLIT,
-    batch_size=BATCH_SIZE,
     num_epochs=NUM_EPOCHS,
     device=device,
     patience=PATIENCE,
