@@ -11,10 +11,11 @@ import seaborn as sns
 sns.set_theme(style="darkgrid")
 
 def train_model(model: nn.Module,
-                train_loader: DataLoader,
-                val_loader: DataLoader,
+                dataset: torch.utils.data.Dataset,
                 criterion: nn.Module,
                 optimizer: optim.Optimizer,
+                validation_split: float=0.2,
+                batch_size: int=32,
                 num_epochs: int=10,
                 device: torch.device=torch.device('cpu'),
                 plot_loss_path: str=None,
@@ -27,10 +28,11 @@ def train_model(model: nn.Module,
 
     Args:
         model (nn.Module): The model to train.
-        train_loader (DataLoader): DataLoader providing batches of training data.
-        val_loader (DataLoader): DataLoader providing batches of validation data.
+        dataset: The full dataset to split and train on.
         criterion: The loss function.
         optimizer: The optimization algorithm.
+        validation_split (float): Fraction of data to use for validation.
+        batch_size (int): Batch size for DataLoaders.
         num_epochs (int): Number of epochs to train for.
         device (torch.device): The device to train on ('cpu' or 'cuda').
         plot_loss_path (str): Path to save the training and validation loss plot.
@@ -42,6 +44,19 @@ def train_model(model: nn.Module,
     Returns:
         dict: A dictionary containing training and validation losses for each epoch.
     """
+    # Split dataset into training and validation sets
+    print("Splitting dataset into training and validation sets...")
+    dataset_size = len(dataset)
+    val_size = int(validation_split * dataset_size)
+    train_size = dataset_size - val_size
+    train_dataset, val_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
+    print(f"Training samples: {len(train_dataset)}, Validation samples: {len(val_dataset)}")
+
+    # Create DataLoaders for the training and validation sets
+    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size, shuffle=False)
+    print(f"DataLoaders created with lengths: {len(train_loader)}, {len(val_loader)}.")
+
     model.to(device)  # Move model to the specified device
     print(f"Starting training on {device} for {num_epochs} epochs...")
 
