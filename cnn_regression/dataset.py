@@ -5,16 +5,18 @@ import numpy as np
 import pandas as pd
 
 class MSI_Image_Dataset(Dataset):
-    def __init__(self, features: pd.DataFrame, coordinates: pd.DataFrame, samples_indices: np.ndarray, target: np.ndarray, feature_transform=None, target_transform=None, img_size: tuple = (1024, 1024)):
+    def __init__(self, features: pd.DataFrame, coordinates: pd.DataFrame, samples_indices: np.ndarray, target: np.ndarray, transform=None, feature_transform=None, target_transform=None, img_size: tuple = (1024, 1024)):
         """
         features: DataFrame of features (n_samples, n_features)
         coordinates: DataFrame with 'x', 'y', and 'run' columns (n_samples, ...)
         samples_indices: numpy array indicating the slide/run each sample belongs to (n_samples,)
         target: numpy array, target values for the dataset
+        transform: optional transform to apply to both feature and target images
         feature_transform: optional transform to apply to the feature images
         target_transform: optional transform to apply to the target images
         img_size: tuple indicating the target size for the images (height, width)
         """
+        self.transform = transform
         self.feature_transform = feature_transform
         self.target_transform = target_transform
         self.target = target
@@ -70,9 +72,15 @@ class MSI_Image_Dataset(Dataset):
             img[:, y_coords[i], x_coords[i]] = sample_features[i]
             label_img[y_coords[i], x_coords[i]] = labels[i]
 
-        # Transform the images arrays to tensors
-        img = torch.from_numpy(img)
-        label_img = torch.from_numpy(label_img).unsqueeze(0)  # Add channel dimension
+        # Transform the images arrays
+        if self.transform:
+            img , label_img = self.transform(img, label_img)
+
+        # Convert to tensors
+        img, label_img = torch.from_numpy(img), torch.from_numpy(label_img)
+
+        # Add channel dimension to label image
+        label_img = label_img.unsqueeze(0)
 
         # Apply any additional transformations
         if self.feature_transform:

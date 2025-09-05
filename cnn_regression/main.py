@@ -4,7 +4,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torch.optim.lr_scheduler import OneCycleLR
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
 from tqdm import tqdm
+import torchvision.transforms.v2 as T
 import segmentation_models_pytorch as smp
 import joblib
 import yaml
@@ -141,39 +143,69 @@ else:
     print("No dimensional reduction applied, using standardized features.")
     features_for_dataset = peaks
 
-# Pass cleaned arrays/DataFrames to the dataset
+# Split the slides into training and validation sets
+train_slides, val_slides = train_test_split(slides, test_size=VALIDATION_SPLIT, random_state=42)
+
+# Create masks for training and validation sets
+train_mask, val_mask = pixels['run'].isin(train_slides), pixels['run'].isin(val_slides)
+
+# Create separate DataFrames for training and validation sets
+features_for_dataset_train = features_for_dataset[train_mask].reset_index(drop=True)
+features_for_dataset_val = features_for_dataset[val_mask].reset_index(drop=True)
+pixels_train = pixels[train_mask].reset_index(drop=True)
+pixels_val = pixels[val_mask].reset_index(drop=True)
+
+print(f"Training set: {len(train_slides)} slides, {len(pixels_train)} samples")
+print(f"Validation set: {len(val_slides)} slides, {len(pixels_val)} samples")
+
+# Define your training pipeline
+train_transform = T.Compose([
+    T.RandomVerticalFlip(p=0.5),
+    T.RandomHorizontalFlip(p=0.5),
+    T.RandomRotation(degrees=180),
+    T.ToDtype(torch.float32), # Normalizes to [0.0, 1.0]
+])
+
+# Define your validation pipeline (no augmentation)
+val_transform = T.Compose([
+    T.ToDtype(torch.float32),
+])
+
+# Pass cleaned DataFrames to the dataset
 print("Creating dataset...")
-dataset = MSI_Image_Dataset(
-    features=features_for_dataset,
-    coordinates=pixels[['x', 'y']],
-    samples_indices=pixels['run'].values,
-    target=pixels[TARGET].values,
+dataset_train = MSI_Image_Dataset(
+    features=features_for_dataset_train,
+    coordinates=pixels_train[['x', 'y']],
+    samples_indices=pixels_train['run'].values,
+    target=pixels_train[TARGET].values,
+    transform=train_transform,
     target_transform=target_transform,
     img_size=IMAGE_SIZE
 )
 
-print(f"Dataset created with {dataset.n_observations} samples and {dataset.n_features} features.")
+dataset_val = MSI_Image_Dataset(
+    features=features_for_dataset_val,
+    coordinates=pixels_val[['x', 'y']],
+    samples_indices=pixels_val['run'].values,
+    target=pixels_val[TARGET].values,
+    transform=val_transform,
+    target_transform=target_transform,
+    img_size=IMAGE_SIZE
+)
+
+print(f"Dataset created with {dataset_train.n_observations} samples and {dataset_train.n_features} features.")
+print(f"Dataset created with {dataset_val.n_observations} samples and {dataset_val.n_features} features.")
 
 # Clear memory
-del peaks, pixels, features_for_dataset
+del peaks, pixels, features_for_dataset, features_for_dataset_train, features_for_dataset_val
 gc.collect()
 
-# Split dataset into training and validation sets
-print("Splitting dataset into training and validation sets...")
-dataset_size = len(dataset)
-val_size = int(VALIDATION_SPLIT * dataset_size)
-train_size = dataset_size - val_size
-
-train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
-
 # Create DataLoaders for training and validation
-train_loader = DataLoader(dataset=train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-val_loader = DataLoader(dataset=val_dataset, batch_size=BATCH_SIZE, shuffle=False)
-
-print(f"Training samples: {len(train_dataset)}, Validation samples: {len(val_dataset)}")
+train_loader = DataLoader(dataset=dataset_train, batch_size=BATCH_SIZE, shuffle=True)
+val_loader = DataLoader(dataset=dataset_val, batch_size=BATCH_SIZE, shuffle=False)
 
 # Get input and output channel dimensions from dataset
-in_channels = dataset.n_features
+in_channels = dataset_train.n_features
 
 # Initialize Model, Loss and Optimizer
 print("Initializing model...")
@@ -189,7 +221,7 @@ print(model)
 criterion = nn.HuberLoss(delta=HUBER_DELTA) 
 
 # Optimizer
-optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
 # OneCycleLR Scheduler
 scheduler = OneCycleLR(
