@@ -68,6 +68,9 @@ if __name__ == '__main__':
     MAX_LR = config.get('max_lr')
     WEIGHT_DECAY = config.get('weight_decay')
 
+    # Model Hyperparameters
+    ENCODER = config.get('encoder')
+
     # Target and Features Transformations
     TARGET_TRANSFORM = config.get('target_transform')
     FEATURES_TRANSFORM = config.get('features_transform')
@@ -111,7 +114,7 @@ if __name__ == '__main__':
 
     print("Loading the model...")
     model = smp.Unet(
-                encoder_name="resnet34",  # Choose encoder architecture
+                encoder_name=ENCODER,  # Choose encoder architecture
                 encoder_weights=None,  # No pre-trained weights
                 in_channels=in_channels,
                 classes=1,  # Single output channel for regression

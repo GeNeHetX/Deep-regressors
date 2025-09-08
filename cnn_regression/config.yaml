@@ -18,14 +18,14 @@ excluded_slides:
   - 552138-25
 
 # Training configuration
-batch_size: 1  # You can't use batch_size > 1 for images with different dimensions
+batch_size: 2
 validation_split: 0.1
 
 # Optimization configuration
 num_epochs: 1000
 huber_delta: 1
-learning_rate: 0.001
-max_lr: 0.001
+learning_rate: 0.0001
+max_lr: 0.0001
 weight_decay: 0.000001
 
 # Early stopping configuration
@@ -33,12 +33,13 @@ patience: 30
 min_delta: 0.00000001
 
 # Model configuration
+encoder: resnet18
 image_size:
   - 1024
   - 1024
 
 # Dimensionality reduction configuration
-reduction_n_component: 32
+reduction_n_component: 128
 reduction_method: svd   # options: pca, svd
 ica: True
 

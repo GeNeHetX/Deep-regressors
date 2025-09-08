@@ -46,6 +46,9 @@ WEIGHT_DECAY = config.get('weight_decay')
 PATIENCE = config.get('patience')
 MIN_DELTA = config.get('min_delta')
 
+# Model Hyperparameters
+ENCODER = config.get('encoder')
+
 # UNet Hyperparameters
 IMAGE_SIZE = config.get('image_size')
 
@@ -210,7 +213,7 @@ in_channels = dataset_train.n_features
 # Initialize Model, Loss and Optimizer
 print("Initializing model...")
 model = smp.Unet(
-            encoder_name="resnet34",  # Choose encoder architecture
+            encoder_name=ENCODER,  # Choose encoder architecture
             encoder_weights=None,  # No pre-trained weights
             in_channels=in_channels,
             classes=1,  # Single output channel for regression
@@ -221,7 +224,7 @@ print(model)
 criterion = nn.HuberLoss(delta=HUBER_DELTA) 
 
 # Optimizer
-optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
 # OneCycleLR Scheduler
 scheduler = OneCycleLR(
