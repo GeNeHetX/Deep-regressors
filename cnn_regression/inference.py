@@ -65,7 +65,6 @@ if __name__ == '__main__':
     # Optimization Hyperparameters
     HUBER_DELTA = config.get('huber_delta')
     LEARNING_RATE = config.get('learning_rate')
-    MAX_LR = config.get('max_lr')
     WEIGHT_DECAY = config.get('weight_decay')
 
     # Model Hyperparameters
@@ -81,7 +80,7 @@ if __name__ == '__main__':
     ICA = config.get('ica', False)  # Check if ICA is enabled
 
     # Define model suffix and paths
-    MODEL_SUFFIX = f"{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}{'_ica' if ICA else ''}_{HUBER_DELTA}_{LEARNING_RATE}_{MAX_LR}_{WEIGHT_DECAY}"
+    MODEL_SUFFIX = f"{TARGET}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}{'_ica' if ICA else ''}_{HUBER_DELTA}_{LEARNING_RATE}_{WEIGHT_DECAY}_{ENCODER}"
     MODEL_PATH = f'results/models/UNet_regression_{MODEL_SUFFIX}.pth'
     PREDICTIONS_PATH = f'results/predictions/predictions_unet_{MODEL_SUFFIX}.npy'
 
@@ -117,8 +116,9 @@ if __name__ == '__main__':
                 encoder_name=ENCODER,  # Choose encoder architecture
                 encoder_weights=None,  # No pre-trained weights
                 in_channels=in_channels,
-                classes=1,  # Single output channel for regression
-            )
+                # decoder_channels=(1024, 512, 256, 128, 64),
+                classes=1  # Single output channel for regression
+        )
     
     model.load_state_dict(torch.load(MODEL_PATH))
 
@@ -232,7 +232,7 @@ if __name__ == '__main__':
     pixels_all = pixels_all[pixels_all['Density_Defects'] < 0.1]
 
     # Save predictions
-    output_path = f"results/predictions/unet_predictions_{TARGET}_{MODEL_SUFFIX}.csv"
+    output_path = f"results/predictions/unet_predictions_{MODEL_SUFFIX}.csv"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     pixels_all.to_csv(output_path, index=False)
     print(f"Predictions saved to {output_path}")
@@ -255,7 +255,7 @@ if __name__ == '__main__':
     ax.set_title('Prediction vs True Distribution')
     ax.set_yscale('log')
     ax.legend(fontsize=9)
-    plt.savefig(f"results/figures/unet_predictions_distribution_{TARGET}_{MODEL_SUFFIX}.png")
+    plt.savefig(f"results/figures/unet_predictions_distribution_{MODEL_SUFFIX}.png")
     plt.close()
 
     # Plot the predicted target density for each slide compared to the original target density
@@ -280,7 +280,7 @@ if __name__ == '__main__':
         ax[i].axis('equal')
         ax[i].invert_yaxis()
 
-    plt.savefig(f"results/figures/unet_predictions_heatmaps_{TARGET}_{MODEL_SUFFIX}.png")
+    plt.savefig(f"results/figures/unet_predictions_heatmaps_{MODEL_SUFFIX}.png")
 
     fig, axs = plt.subplots(nrows=11, ncols=6, figsize=(25, 40), tight_layout=True)
     ax = axs.flatten()
@@ -303,4 +303,4 @@ if __name__ == '__main__':
         ax[i].axis('equal')
         ax[i].invert_yaxis()
 
-    plt.savefig(f"results/figures/unet_predictions_heatmaps_{TARGET}_{MODEL_SUFFIX}_lesion.png")
+    plt.savefig(f"results/figures/unet_predictions_heatmaps_{MODEL_SUFFIX}_lesion.png")

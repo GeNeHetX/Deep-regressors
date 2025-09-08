@@ -63,8 +63,6 @@ def train_model(model: nn.Module,
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            if scheduler is not None:
-                scheduler.step()
             epoch_train_loss += loss.item() * inputs.size(0)
 
         avg_train_loss = epoch_train_loss / len(train_loader.dataset)
@@ -82,6 +80,10 @@ def train_model(model: nn.Module,
 
         avg_val_loss = epoch_val_loss / len(val_loader.dataset)
         history['val_loss'].append(avg_val_loss)
+
+        # Step the scheduler if provided
+        if scheduler is not None:
+            scheduler.step(avg_val_loss)
 
         # Print losses for the epoch
         tqdm.write(f"Epoch [{epoch+1}/{num_epochs}], Train Loss: {avg_train_loss:.2e}, Val Loss: {avg_val_loss:.2e}")

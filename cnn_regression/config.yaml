@@ -24,9 +24,10 @@ validation_split: 0.1
 # Optimization configuration
 num_epochs: 1000
 huber_delta: 1
-learning_rate: 0.0001
-max_lr: 0.0001
+learning_rate: 0.001
 weight_decay: 0.000001
+scheduler_factor: 0.2
+scheduler_patience: 5
 
 # Early stopping configuration
 patience: 30
