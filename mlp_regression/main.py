@@ -92,17 +92,22 @@ n_slides = len(slides)
 # Scale the features without centering
 print("Scaling features...")
 for slide in tqdm(slides, desc="Processing slides"):
-    # Initialize scaler without centering
-    scaler = StandardScaler(with_mean=False, with_std=True)
+    # Check if the slide exists in pixels
+    try:
+        # Load the scaler for the current slide
+        scaler = joblib.load(f"results/models/scalers/scaler_{slide}.joblib")
+    except FileNotFoundError:
+        # Initialize scaler without centering
+        scaler = StandardScaler(with_mean=False, with_std=True)
 
-    # Fit the scaler on the features
-    scaler.fit(peaks.loc[pixels['run'] == slide].values)
+        # Fit the scaler on the features
+        scaler.fit(peaks.loc[pixels['run'] == slide].values)
+
+        # Save the scaler
+        joblib.dump(scaler, f"results/models/scalers/scaler_{slide}.joblib")
 
     # Transform the features
     peaks.loc[pixels['run'] == slide] = scaler.transform(peaks.loc[pixels['run'] == slide].values)
-
-    # Save the scaler
-    joblib.dump(scaler, f"results/models/scalers/scaler_{slide}.joblib")
 
 # Count the nan values in the peaks dataframe
 n_nan = peaks.isna().sum().sum()
@@ -211,3 +216,7 @@ history = train_model(
     model_save_path=MODEL_SAVE_PATH
 )
 print("Training completed.")
+
+# Run inference.py script to generate predictions
+print("Running inference...")
+os.system(f"python mlp_regression/inference.py")

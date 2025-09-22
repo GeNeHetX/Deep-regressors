@@ -7,13 +7,12 @@ import joblib
 import gc
 import os
 
-from sklearn.preprocessing import StandardScaler
 from scipy.stats import pearsonr, spearmanr
 from tqdm import tqdm
 
 from dataset import TableDataset
 from model import MLPRegression
-from utils import get_target_transform, get_inverse_transform, perform_dim_reduction
+from utils import get_target_transform, get_inverse_transform
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -97,89 +96,23 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
-    # Load Data
-    print("Loading data...")
-    peaks = pd.read_pickle(PEAKS_PATH)
-    pixels = pd.read_pickle(PIXELS_PATH)
-
-    # Clean the data by dropping excluded slides
-    if EXCLUDED_SLIDES:
-        print(f"Dropping excluded slides...")
-        mask = ~pixels['run'].isin(EXCLUDED_SLIDES)
-        peaks = peaks[mask].reset_index(drop=True)
-        pixels = pixels[mask].reset_index(drop=True)
-
-    # Extract unique slides and their count
-    slides = pixels['run'].unique()
-    n_slides = len(slides)
-
-    # Scale the features without centering
-    print("Scaling features...")
-    for slide in tqdm(slides, desc="Processing slides"):
-        # load scaler
-        scaler = joblib.load(f"results/models/scalers/scaler_{slide}.joblib")
-
-        # Fit the scaler on the features
-        scaler.fit(peaks.loc[pixels['run'] == slide].values)
-
-        # Transform the features
-        peaks.loc[pixels['run'] == slide] = scaler.transform(peaks.loc[pixels['run'] == slide].values)
-
-
-    # Count the nan values in the peaks dataframe
-    n_nan = peaks.isna().sum().sum()
-    print(f"Number of NaN values in the peaks dataframe: {n_nan}")
-
-    # Drop the rows with NaN values
-    peaks.dropna(axis=0, inplace=True)
-    pixels = pixels.loc[peaks.index]
-
-    # reset the index of the peaks dataframe
-    peaks.reset_index(drop=True, inplace=True)
-    pixels.reset_index(drop=True, inplace=True)
-
-    # Transform the peaks logarithmically
-    if FEATURES_TRANSFORM == 'log1p':
-        print("Applying logarithmic transformation to peaks...")
-        peaks = np.log1p(peaks)
-
-    # Perform dimensionality reduction by loading the model and applying it
+    # Load dimensionality reduction models
     if REDUCTION_N_COMPONENT is not None:
         print(f"Loading and applying dimensionality reduction model: {REDUCTION_METHOD.upper()} with n_components={REDUCTION_N_COMPONENT}{' + ICA' if ICA else ''}...")
 
         model_reduction_path = f"results/models/{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}.joblib"
         print(f"Loading dimensionality reduction model from {model_reduction_path}")
         model_reduction = joblib.load(model_reduction_path)
-        features_for_dataset = model_reduction.transform(peaks)
 
         if ICA:
             ica_model_path = f"results/models/{REDUCTION_N_COMPONENT}_ica.joblib"
             print(f"Loading ICA model from {ica_model_path}")
-            ica_model = joblib.load(ica_model_path)  
-            features_for_dataset = ica_model.transform(features_for_dataset)
-    else:
-        print("No dimensional reduction applied, using standardized features.")
-        features_for_dataset = peaks
-
-    # Pass cleaned arrays/DataFrames to the dataset
-    print("Creating dataset...")
-    dataset = TableDataset(
-        features=features_for_dataset,
-        target=pixels[TARGET].values,
-        target_transform=target_transform
-    )
-
-    print(f"Dataset created with {dataset.n_samples} samples and {dataset.n_features} features.")
-
-    # Clear memory
-    del peaks, features_for_dataset
-    gc.collect()
+            ica_model = joblib.load(ica_model_path)
 
     # --- Load the model ---
-    input_dim = dataset.n_features
+    input_dim = REDUCTION_N_COMPONENT
     output_dim = 1 
 
-    # Load the model
     print("Loading the model...")
     model = MLPRegression(
         input_dim=input_dim,
@@ -192,63 +125,176 @@ if __name__ == '__main__':
     print(model)
     
     model.load_state_dict(torch.load(MODEL_PATH))
-    
-    # --- Make predictions ---
-    print("Making predictions...")
-    predictions = predict(model, dataset.features, device, batch_size=BATCH_SIZE)
-    print("Predictions are done.")
-    print(f"Predictions shape: {predictions.shape}")
 
-    # Inverse transform predictions
-    print(f"Applying inverse transformation to predictions using {TARGET_TRANSFORM}...")
-    predictions = inverse_transform(predictions)
+    # Move model to the appropriate device
+    model.to(device)
+
+    # List all the slides in the data directory, excluding the ones in excluded_slides
+    slides = np.sort([slide for slide in os.listdir("data_external") if slide not in EXCLUDED_SLIDES])
+    n_slides = len(slides)
+    print(f"Found {n_slides} slides for inference.")
+
+    # Load trypsin peaks
+    with open("trypsin_peaks.yaml", "r") as f:
+        trypsin_peaks = yaml.safe_load(f)
+
+    pixels_all = pd.DataFrame()  # Initialize an empty DataFrame to collect all predictions
+
+    for slide in tqdm(slides, desc="Processing slides"):
+        tqdm.write(f"Processing slide: {slide}")
+
+        # Load Data
+        tqdm.write("Loading data...")
+        peaks = pd.read_pickle(f"data_external/{slide}/results/peaks_aligned.pkl")
+        pixels = pd.read_feather(f"data_external/{slide}/results/mse_pixels.feather")
+
+        # Drop the peaks that are in the trypsin peptide masses with tolerance 0.2
+        for col in peaks.columns:
+            if np.min(np.abs(float(col) - np.array(trypsin_peaks))) < 0.2:
+                tqdm.write(f"Dropping trypsin peak: {col}")
+                peaks.drop(col, axis=1, inplace=True)
+
+        # Drop microdissection columns from pixels DataFrame
+        pixels = pixels.drop(columns=pixels.filter(regex='Density_microdissection_').columns)
+
+        # Scale the features without centering
+        tqdm.write("Scaling features...")
+        scaler = joblib.load(f"results/models/scalers/scaler_{slide}.joblib")  # load scaler
+        scaler.fit(peaks.loc[pixels['run'] == slide].values)  # Fit the scaler on the features
+        peaks.loc[pixels['run'] == slide] = scaler.transform(peaks.loc[pixels['run'] == slide].values)  # Transform the features
+
+        # Count the nan values in the peaks dataframe
+        n_nan = peaks.isna().sum().sum()
+        tqdm.write(f"Number of NaN values in the peaks dataframe: {n_nan}")
+
+        # Drop the rows with NaN values
+        peaks.dropna(axis=0, inplace=True)
+        pixels = pixels.loc[peaks.index]
+
+        # reset the index of the peaks dataframe
+        peaks.reset_index(drop=True, inplace=True)
+        pixels.reset_index(drop=True, inplace=True)
+
+        # Transform the peaks logarithmically
+        if FEATURES_TRANSFORM == 'log1p':
+            tqdm.write("Applying logarithmic transformation to peaks...")
+            peaks = np.log1p(peaks)
+
+        # Apply dimensionality reduction if specified
+        if REDUCTION_N_COMPONENT is not None:
+            tqdm.write(f"Applying dimensionality reduction: {REDUCTION_METHOD.upper()} with n_components={REDUCTION_N_COMPONENT}{' + ICA' if ICA else ''}...")
+
+            # Apply the dimensionality reduction model
+            features_for_dataset = model_reduction.transform(peaks)
+
+            # If ICA is enabled, apply ICA transformation
+            if ICA:
+                tqdm.write("Applying ICA transformation...")
+                features_for_dataset = ica_model.transform(features_for_dataset)
+
+        # Pass cleaned arrays/DataFrames to the dataset
+        tqdm.write("Creating dataset...")
+        dataset = TableDataset(
+            features=features_for_dataset,
+            target=pixels[TARGET].values,
+            target_transform=target_transform
+        )
+
+        tqdm.write(f"Dataset created with {dataset.n_samples} samples and {dataset.n_features} features.")
+        
+        # --- Make predictions ---
+        tqdm.write("Making predictions...")
+        predictions = predict(model, dataset.features, device, batch_size=BATCH_SIZE)
+
+        # Inverse transform predictions
+        tqdm.write(f"Applying inverse transformation to predictions using {TARGET_TRANSFORM}...")
+        predictions = inverse_transform(predictions)
+
+        # Add the predictions to the pixels DataFrame
+        tqdm.write("Adding predictions to pixels DataFrame...")
+        pixels[f'Predicted_{TARGET}'] = predictions
+        pixels_all = pd.concat([pixels_all, pixels], ignore_index=True)
+        
+        # Clear memory
+        tqdm.write("Clearing memory...")
+        del dataset, peaks, features_for_dataset, pixels, predictions
+        gc.collect()
+
+    # Remove the defects
+    print("Removing defects from predictions...")
+    pixels_all = pixels_all[pixels_all['Density_Defects'] < 0.1]
+    pixels_all = pixels_all[pixels_all['Density_Defects'] < 0.1]
 
     # Save predictions
-    pixels[f'Predicted_{TARGET}'] = predictions
-    output_path = f"results/predictions/mlb_predictions_{MODEL_SUFFIX}.csv"
+    output_path = f"results/predictions/mlb_predictions_{TARGET}_{MODEL_SUFFIX}.csv"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    pixels.to_csv(output_path, index=False)
+    pixels_all.to_csv(output_path, index=False)
     print(f"Predictions saved to {output_path}")
 
+    # Subset the data for visualization
+    pixels_lesion = pixels_all[pixels_all['Density_Lesion'] > 0.5]
+
     # Compute Pearson and Spearman correlations between true and predicted targets
-    pearson_corr, pearson_p = pearsonr(pixels[TARGET], pixels[f'Predicted_{TARGET}'])
-    spearman_corr, spearman_p = spearmanr(pixels[TARGET], pixels[f'Predicted_{TARGET}'])
+    pearson_corr, pearson_p = pearsonr(pixels_lesion[TARGET], pixels_lesion[f'Predicted_{TARGET}'])
+    spearman_corr, spearman_p = spearmanr(pixels_lesion[TARGET], pixels_lesion[f'Predicted_{TARGET}'])
 
     print(f"Pearson correlation: {pearson_corr:.4f} (p={pearson_p:.2e})")
     print(f"Spearman correlation: {spearman_corr:.4f} (p={spearman_p:.2e})")
 
     # Plot the distribution of the true and predicted targets
     fig, ax = plt.subplots(figsize=(12, 6), tight_layout=True)
-    bins = np.linspace(min(pixels[TARGET].min(), pixels[f'Predicted_{TARGET}'].min()), max(pixels[TARGET].max(), pixels[f'Predicted_{TARGET}'].max()), 100)
-    ax.hist(pixels[TARGET], bins=bins, alpha=0.5, label='Data')
-    ax.hist(pixels[f'Predicted_{TARGET}'], bins=bins, alpha=0.5, label='Predictions')
+    bins = np.linspace(min(pixels_lesion[TARGET].min(), pixels_lesion[f'Predicted_{TARGET}'].min()), max(pixels_lesion[TARGET].max(), pixels_lesion[f'Predicted_{TARGET}'].max()), 100)
+    ax.hist(pixels_lesion[TARGET], bins=bins, alpha=0.5, label='Data')
+    ax.hist(pixels_lesion[f'Predicted_{TARGET}'], bins=bins, alpha=0.5, label='Predictions')
     ax.set_title('Prediction vs True Distribution')
     ax.set_yscale('log')
     ax.legend(fontsize=9)
-    plt.savefig(f"results/figures/mlb_predictions_distribution_{MODEL_SUFFIX}.png")
+    plt.savefig(f"results/figures/mlb_predictions_distribution_{TARGET}_{MODEL_SUFFIX}.png")
     plt.close()
 
-    # Plot the predicted CD8 density for each lame compared to the original CD8 density
+    # Plot the predicted target density for each slide compared to the original target density
     fig, axs = plt.subplots(nrows=11, ncols=6, figsize=(25, 40), tight_layout=True)
     ax = axs.flatten()
-    for i, lame in tqdm(enumerate(sorted(list(slides) * 2)), desc="Plotting heatmaps"):
-        pixels_lame = pixels[pixels['run'] == lame]
-        
-        if i%2 == 0:
+    for i, slide in tqdm(enumerate(sorted(list(slides) * 2)), desc="Plotting heatmaps"):
+        pixels_slide = pixels_all[pixels_all['run'] == slide]
+        if i % 2 == 0:
             # Create a pivot table for imshow
-            heatmap_data = pixels_lame.pivot(index='y', columns='x', values=TARGET)
-            im = ax[i].imshow(heatmap_data, cmap='viridis', vmin=0, vmax=np.quantile(pixels_lame[TARGET], 0.99), origin='upper')
+            heatmap_data = pixels_slide.pivot(index='y', columns='x', values=TARGET)
+            im = ax[i].imshow(heatmap_data, cmap='viridis', vmin=0, vmax=np.quantile(pixels_slide[TARGET], 0.99), origin='upper')
             fig.colorbar(im, ax=ax[i])
         else:
             # Create a pivot table for imshow
-            heatmap_data = pixels_lame.pivot(index='y', columns='x', values=f'Predicted_{TARGET}')
-            im = ax[i].imshow(heatmap_data, cmap='viridis', vmin=0, vmax=np.quantile(pixels_lame[f'Predicted_{TARGET}'], 0.99), origin='upper')
+            heatmap_data = pixels_slide.pivot(index='y', columns='x', values=f'Predicted_{TARGET}')
+            im = ax[i].imshow(heatmap_data, cmap='viridis', vmin=0, vmax=np.quantile(pixels_slide[f'Predicted_{TARGET}'], 0.99), origin='upper')
             fig.colorbar(im, ax=ax[i])
 
-        ax[i].set_title(f"{lame} {'Original' if i%2 == 0 else 'Predicted'}")
+        ax[i].set_title(f"{slide} {'Original' if i%2 == 0 else 'Predicted'}")
         ax[i].set_xticks([])
         ax[i].set_yticks([])
         ax[i].axis('equal')
         ax[i].invert_yaxis()
 
-    plt.savefig(f"results/figures/mlb_predictions_heatmaps_{MODEL_SUFFIX}.png")
+    plt.savefig(f"results/figures/mlb_predictions_heatmaps_{TARGET}_{MODEL_SUFFIX}.png")
+
+    fig, axs = plt.subplots(nrows=11, ncols=6, figsize=(25, 40), tight_layout=True)
+    ax = axs.flatten()
+    for i, slide in tqdm(enumerate(sorted(list(slides) * 2)), desc="Plotting heatmaps"):
+        pixels_slide = pixels_lesion[pixels_lesion['run'] == slide]
+        if i % 2 == 0:
+            # Create a pivot table for imshow
+            heatmap_data = pixels_slide.pivot(index='y', columns='x', values=TARGET)
+            im = ax[i].imshow(heatmap_data, cmap='viridis', vmin=0, vmax=np.quantile(pixels_slide[TARGET], 0.99), origin='upper')
+            fig.colorbar(im, ax=ax[i])
+        else:
+            # Create a pivot table for imshow
+            heatmap_data = pixels_slide.pivot(index='y', columns='x', values=f'Predicted_{TARGET}')
+            im = ax[i].imshow(heatmap_data, cmap='viridis', vmin=0, vmax=np.quantile(pixels_slide[f'Predicted_{TARGET}'], 0.99), origin='upper')
+            fig.colorbar(im, ax=ax[i])
+
+        ax[i].set_title(f"{slide} {'Original' if i%2 == 0 else 'Predicted'}")
+        ax[i].set_xticks([])
+        ax[i].set_yticks([])
+        ax[i].axis('equal')
+        ax[i].invert_yaxis()
+
+    plt.savefig(f"results/figures/mlb_predictions_heatmaps_{TARGET}_{MODEL_SUFFIX}_lesion.png")
