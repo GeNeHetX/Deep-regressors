@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
-from torch.optim.lr_scheduler import OneCycleLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from sklearn.preprocessing import StandardScaler
 from tqdm import tqdm
 import joblib
@@ -37,8 +37,9 @@ VALIDATION_SPLIT = config.get('validation_split')
 # Optimization Hyperparameters
 HUBER_DELTA = config.get('huber_delta')
 LEARNING_RATE = config.get('learning_rate')
-MAX_LR = config.get('max_lr')
 WEIGHT_DECAY = config.get('weight_decay')
+SCHEDULER_FACTOR = config.get('scheduler_factor')
+SCHEDULER_PATIENCE = config.get('scheduler_patience')
 
 # Early Stopping Hyperparameters
 PATIENCE = config.get('patience')
@@ -60,7 +61,7 @@ REDUCTION_N_COMPONENT = config.get('reduction_n_component')
 ICA = config.get('ica', False)  # Check if ICA is enabled
 
 # Define model suffix and paths
-MODEL_SUFFIX = f"{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{ARCHITECTURE_FACTOR}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}{'_ica' if ICA else ''}_{HUBER_DELTA}_{LEARNING_RATE}_{MAX_LR}_{WEIGHT_DECAY}"
+MODEL_SUFFIX = f"{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{ARCHITECTURE_FACTOR}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}{'_ica' if ICA else ''}_{HUBER_DELTA}_{LEARNING_RATE}_{WEIGHT_DECAY}"
 MODEL_SAVE_PATH = f'results/models/MLP_regression_{MODEL_SUFFIX}.pth'
 PLOT_LOSS_PATH = f'results/figures/MLP_regression_loss_{MODEL_SUFFIX}.png'
 MODEL_BASE_PATH = f"results/models/{REDUCTION_N_COMPONENT}"
@@ -192,11 +193,11 @@ criterion = nn.HuberLoss(delta=HUBER_DELTA)
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
 # OneCycleLR Scheduler
-scheduler = OneCycleLR(
+scheduler = ReduceLROnPlateau(
     optimizer,
-    max_lr=MAX_LR,
-    steps_per_epoch=len(train_loader),
-    epochs=NUM_EPOCHS
+    mode='min',      # Reduce LR when the metric has stopped decreasing
+    factor=SCHEDULER_FACTOR,      # Factor by which the learning rate will be reduced. new_lr = lr * factor
+    patience=SCHEDULER_PATIENCE      # Number of epochs with no improvement after which learning rate will be reduced
 )
 
 # Training

@@ -65,7 +65,6 @@ if __name__ == '__main__':
     # Optimization Hyperparameters
     HUBER_DELTA = config.get('huber_delta')
     LEARNING_RATE = config.get('learning_rate')
-    MAX_LR = config.get('max_lr')
     WEIGHT_DECAY = config.get('weight_decay')
 
     # MLP Hyperparameters
@@ -84,7 +83,7 @@ if __name__ == '__main__':
     ICA = config.get('ica', False)  # Check if ICA is enabled
 
     # Define model suffix and paths
-    MODEL_SUFFIX = f"{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{ARCHITECTURE_FACTOR}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}{'_ica' if ICA else ''}_{HUBER_DELTA}_{LEARNING_RATE}_{MAX_LR}_{WEIGHT_DECAY}"
+    MODEL_SUFFIX = f"{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{ARCHITECTURE_FACTOR}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}{'_ica' if ICA else ''}_{HUBER_DELTA}_{LEARNING_RATE}_{WEIGHT_DECAY}"
     MODEL_PATH = f'results/models/MLP_regression_{MODEL_SUFFIX}.pth'
     PREDICTIONS_PATH = f'results/predictions/predictions_mlp_{MODEL_SUFFIX}.npy'
 
