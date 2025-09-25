@@ -60,6 +60,7 @@ if __name__ == '__main__':
     PIXELS_PATH = config.get('pixels_path_inference')
     TARGET = config.get('target_inference')
     EXCLUDED_SLIDES = config.get('excluded_slides')  # Default to empty list if not provided
+    SCALE = config.get('scale')
     BATCH_SIZE = config.get('batch_size_inference')
 
     # Optimization Hyperparameters
@@ -95,6 +96,11 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
+    # load the data
+    print("Loading data...")
+    peaks_slides = pd.read_pickle(PEAKS_PATH)
+    pixels_slides = pd.read_pickle(PIXELS_PATH)
+
     # Load dimensionality reduction models
     if REDUCTION_N_COMPONENT is not None:
         print(f"Loading and applying dimensionality reduction model: {REDUCTION_METHOD.upper()} with n_components={REDUCTION_N_COMPONENT}{' + ICA' if ICA else ''}...")
@@ -109,7 +115,7 @@ if __name__ == '__main__':
             ica_model = joblib.load(ica_model_path)
 
     # --- Load the model ---
-    input_dim = REDUCTION_N_COMPONENT
+    input_dim = peaks_slides.shape[1]
     output_dim = 1 
 
     print("Loading the model...")
@@ -144,23 +150,26 @@ if __name__ == '__main__':
 
         # Load Data
         tqdm.write("Loading data...")
-        peaks = pd.read_pickle(f"data_external/{slide}/results/peaks_aligned.pkl")
-        pixels = pd.read_feather(f"data_external/{slide}/results/mse_pixels.feather")
+        peaks = peaks_slides[pixels_slides['batch'] == slide].copy().reset_index(drop=True)
+        pixels = pixels_slides[pixels_slides['batch'] == slide].copy().reset_index(drop=True)
+        # peaks = pd.read_pickle(f"data_external/{slide}/results/peaks_aligned.pkl")
+        # pixels = pd.read_feather(f"data_external/{slide}/results/mse_pixels.feather")
+        # pixels.rename(columns={'run': 'batch'}, inplace=True)
 
-        # Drop the peaks that are in the trypsin peptide masses with tolerance 0.2
-        for col in peaks.columns:
-            if np.min(np.abs(float(col) - np.array(trypsin_peaks))) < 0.2:
-                tqdm.write(f"Dropping trypsin peak: {col}")
-                peaks.drop(col, axis=1, inplace=True)
+        # # Drop the peaks that are in the trypsin peptide masses with tolerance 0.2
+        # for col in peaks.columns:
+        #     if np.min(np.abs(float(col) - np.array(trypsin_peaks))) < 0.2:
+        #         tqdm.write(f"Dropping trypsin peak: {col}")
+        #         peaks.drop(col, axis=1, inplace=True)
 
-        # Drop microdissection columns from pixels DataFrame
-        pixels = pixels.drop(columns=pixels.filter(regex='Density_microdissection_').columns)
+        # # Drop microdissection columns from pixels DataFrame
+        # pixels = pixels.drop(columns=pixels.filter(regex='Density_microdissection_').columns)
 
         # Scale the features without centering
-        tqdm.write("Scaling features...")
-        scaler = joblib.load(f"results/models/scalers/scaler_{slide}.joblib")  # load scaler
-        scaler.fit(peaks.loc[pixels['run'] == slide].values)  # Fit the scaler on the features
-        peaks.loc[pixels['run'] == slide] = scaler.transform(peaks.loc[pixels['run'] == slide].values)  # Transform the features
+        if SCALE:
+            tqdm.write("Scaling features...")
+            scaler = joblib.load(f"results/models/scalers/scaler_{slide}.joblib")  # load scaler
+            peaks.loc[pixels['batch'] == slide] = scaler.transform(peaks.loc[pixels['batch'] == slide].values)  # Transform the features
 
         # Count the nan values in the peaks dataframe
         n_nan = peaks.isna().sum().sum()
@@ -184,17 +193,17 @@ if __name__ == '__main__':
             tqdm.write(f"Applying dimensionality reduction: {REDUCTION_METHOD.upper()} with n_components={REDUCTION_N_COMPONENT}{' + ICA' if ICA else ''}...")
 
             # Apply the dimensionality reduction model
-            features_for_dataset = model_reduction.transform(peaks)
+            peaks = model_reduction.transform(peaks)
 
             # If ICA is enabled, apply ICA transformation
             if ICA:
                 tqdm.write("Applying ICA transformation...")
-                features_for_dataset = ica_model.transform(features_for_dataset)
+                peaks = ica_model.transform(peaks)
 
         # Pass cleaned arrays/DataFrames to the dataset
         tqdm.write("Creating dataset...")
         dataset = TableDataset(
-            features=features_for_dataset,
+            features=peaks.values,
             target=pixels[TARGET].values,
             target_transform=target_transform
         )
@@ -216,13 +225,13 @@ if __name__ == '__main__':
         
         # Clear memory
         tqdm.write("Clearing memory...")
-        del dataset, peaks, features_for_dataset, pixels, predictions
+        del dataset, peaks, pixels, predictions
         gc.collect()
 
     # Remove the defects
     print("Removing defects from predictions...")
-    pixels_all = pixels_all[pixels_all['Density_Defects'] < 0.1]
-    pixels_all = pixels_all[pixels_all['Density_Defects'] < 0.1]
+    pixels_all = pixels_all[~pixels_all['Defects']]
+    pixels_all = pixels_all[~pixels_all['Defects']]
 
     # Save predictions
     output_path = f"results/predictions/mlb_predictions_{TARGET}_{MODEL_SUFFIX}.csv"
@@ -231,7 +240,7 @@ if __name__ == '__main__':
     print(f"Predictions saved to {output_path}")
 
     # Subset the data for visualization
-    pixels_lesion = pixels_all[pixels_all['Density_Lesion'] > 0.5]
+    pixels_lesion = pixels_all[pixels_all['Lesion']]
 
     # Compute Pearson and Spearman correlations between true and predicted targets
     pearson_corr, pearson_p = pearsonr(pixels_lesion[TARGET], pixels_lesion[f'Predicted_{TARGET}'])
@@ -255,7 +264,7 @@ if __name__ == '__main__':
     fig, axs = plt.subplots(nrows=11, ncols=6, figsize=(25, 40), tight_layout=True)
     ax = axs.flatten()
     for i, slide in tqdm(enumerate(sorted(list(slides) * 2)), desc="Plotting heatmaps"):
-        pixels_slide = pixels_all[pixels_all['run'] == slide]
+        pixels_slide = pixels_all[pixels_all['batch'] == slide]
         if i % 2 == 0:
             # Create a pivot table for imshow
             heatmap_data = pixels_slide.pivot(index='y', columns='x', values=TARGET)
@@ -278,7 +287,7 @@ if __name__ == '__main__':
     fig, axs = plt.subplots(nrows=11, ncols=6, figsize=(25, 40), tight_layout=True)
     ax = axs.flatten()
     for i, slide in tqdm(enumerate(sorted(list(slides) * 2)), desc="Plotting heatmaps"):
-        pixels_slide = pixels_lesion[pixels_lesion['run'] == slide]
+        pixels_slide = pixels_lesion[pixels_lesion['batch'] == slide]
         if i % 2 == 0:
             # Create a pivot table for imshow
             heatmap_data = pixels_slide.pivot(index='y', columns='x', values=TARGET)

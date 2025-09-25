@@ -60,6 +60,7 @@ def train_model(model: nn.Module,
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = model(inputs)
             loss = criterion(outputs, targets)
+            epoch_train_loss += loss.item() * inputs.size(0)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()

@@ -28,6 +28,7 @@ PEAKS_PATH = config.get('peaks_path')
 PIXELS_PATH = config.get('pixels_path')
 TARGET = config.get('target')
 EXCLUDED_SLIDES = config.get('excluded_slides')
+SCALE = config.get('scale')
 
 # Training Hyperparameters
 NUM_EPOCHS = config.get('num_epochs')
@@ -78,37 +79,39 @@ print(f"Using device: {device}")
 print("Loading data...")
 peaks = pd.read_pickle(PEAKS_PATH)
 pixels = pd.read_pickle(PIXELS_PATH)
+pixels.rename(columns={'run': 'batch'}, inplace=True)
 
 # Clean the data by dropping excluded slides
 if EXCLUDED_SLIDES:
     print(f"Dropping excluded slides...")
-    mask = ~pixels['run'].isin(EXCLUDED_SLIDES)
+    mask = ~pixels['batch'].isin(EXCLUDED_SLIDES)
     peaks = peaks[mask].reset_index(drop=True)
     pixels = pixels[mask].reset_index(drop=True)
 
 # Extract unique slides and their count
-slides = pixels['run'].unique()
+slides = pixels['batch'].unique()
 n_slides = len(slides)
 
 # Scale the features without centering
-print("Scaling features...")
-for slide in tqdm(slides, desc="Processing slides"):
-    # Check if the slide exists in pixels
-    try:
-        # Load the scaler for the current slide
-        scaler = joblib.load(f"results/models/scalers/scaler_{slide}.joblib")
-    except FileNotFoundError:
-        # Initialize scaler without centering
-        scaler = StandardScaler(with_mean=False, with_std=True)
+if SCALE:
+    print("Scaling features...")
+    for slide in tqdm(slides, desc="Processing slides"):
+        # Check if the slide exists in pixels
+        try:
+            # Load the scaler for the current slide
+            scaler = joblib.load(f"results/models/scalers/scaler_{slide}.joblib")
+        except FileNotFoundError:
+            # Initialize scaler without centering
+            scaler = StandardScaler(with_mean=False, with_std=True)
 
-        # Fit the scaler on the features
-        scaler.fit(peaks.loc[pixels['run'] == slide].values)
+            # Fit the scaler on the features
+            scaler.fit(peaks.loc[pixels['batch'] == slide].values)
 
-        # Save the scaler
-        joblib.dump(scaler, f"results/models/scalers/scaler_{slide}.joblib")
+            # Save the scaler
+            joblib.dump(scaler, f"results/models/scalers/scaler_{slide}.joblib")
 
-    # Transform the features
-    peaks.loc[pixels['run'] == slide] = scaler.transform(peaks.loc[pixels['run'] == slide].values)
+        # Transform the features
+        peaks.loc[pixels['batch'] == slide] = scaler.transform(peaks.loc[pixels['batch'] == slide].values)
 
 # Count the nan values in the peaks dataframe
 n_nan = peaks.isna().sum().sum()
@@ -130,7 +133,7 @@ if FEATURES_TRANSFORM == 'log1p':
 # Perform dimensionality reduction
 if REDUCTION_N_COMPONENT is not None:
     print(f"Applying {REDUCTION_METHOD.upper()} with n_components={REDUCTION_N_COMPONENT} to features...")
-    features_for_dataset = perform_dim_reduction(
+    peaks = perform_dim_reduction(
         features=peaks,
         n_components=REDUCTION_N_COMPONENT,
         model_base_path=MODEL_BASE_PATH,
@@ -140,12 +143,12 @@ if REDUCTION_N_COMPONENT is not None:
     )
 else:
     print("No dimensional reduction applied, using standardized features.")
-    features_for_dataset = peaks
+    peaks = peaks
 
 # Pass cleaned arrays/DataFrames to the dataset
 print("Creating dataset...")
 dataset = TableDataset(
-    features=features_for_dataset,
+    features=peaks.values,
     target=pixels[TARGET].values,
     target_transform=target_transform
 )
@@ -153,7 +156,7 @@ dataset = TableDataset(
 print(f"Dataset created with {dataset.n_samples} samples and {dataset.n_features} features.")
 
 # Clear memory
-del peaks, pixels, features_for_dataset
+del peaks, pixels
 gc.collect()
 
 # Split dataset into training and validation sets
