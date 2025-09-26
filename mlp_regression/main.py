@@ -77,8 +77,8 @@ print(f"Using device: {device}")
 
 # Load Data
 print("Loading data...")
-peaks = pd.read_pickle(PEAKS_PATH)
-pixels = pd.read_pickle(PIXELS_PATH)
+peaks = pd.read_feather(PEAKS_PATH)
+pixels = pd.read_feather(PIXELS_PATH)
 pixels.rename(columns={'run': 'batch'}, inplace=True)
 
 # Clean the data by dropping excluded slides

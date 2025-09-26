@@ -98,8 +98,8 @@ if __name__ == '__main__':
 
     # load the data
     print("Loading data...")
-    peaks_slides = pd.read_pickle(PEAKS_PATH)
-    pixels_slides = pd.read_pickle(PIXELS_PATH)
+    peaks_slides = pd.read_feather(PEAKS_PATH)
+    pixels_slides = pd.read_feather(PIXELS_PATH)
 
     # Load dimensionality reduction models
     if REDUCTION_N_COMPONENT is not None:
