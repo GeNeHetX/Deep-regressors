@@ -1,0 +1,53 @@
+# Data configuration
+path_to_data: data/MALDI_IHC/aligned_peaks/results
+peaks_path: data/MALDI_IHC/aligned_peaks/results/peaks_scvi_256.feather
+pixels_path: data/MALDI_IHC/aligned_peaks/results/observations.feather
+target: Density_CD8
+threshold: 0.005
+target_transform: none  # options: sqrt, log, none
+features_transform: none  # options: log1p, none
+scale: False
+excluded_slides:
+  - 13AG03225-06
+  - 13AG06573-10
+  - 544085-14
+  - 546332-17
+  - 549724-18
+  - 549724-19
+  - 549764-29
+  - 549857-19
+  - 549857-22
+  - 552138-25
+
+# Training configuration
+batch_size: 2048
+validation_split: 0.1
+
+# Optimization configuration
+num_epochs: 1000
+learning_rate: 1
+weight_decay: 0.00001
+scheduler_factor: 0.2
+scheduler_patience: 5
+
+# Early stopping configuration
+patience: 30
+min_delta: 0.00000001
+
+# Model configuration
+hidden_dim: 512
+num_hidden_layers: 3
+architecture_factor: 0.5  # 1 = Uniform, < 1 = Funnel, > 1 = Expanding
+dropout: 0.2
+
+# # Dimensionality reduction configuration
+# reduction_n_component: 32
+# reduction_method: svd   # options: pca, svd
+# ica: True
+
+# Inference configuration
+path_to_data_inference: data/MALDI_IHC/aligned_peaks/results
+peaks_path_inference: data/MALDI_IHC/aligned_peaks/results/peaks_scvi_256_tissue.feather
+pixels_path_inference: data/MALDI_IHC/aligned_peaks/results/observations_tissue.feather
+target_inference: Density_CD8
+batch_size_inference: 100000

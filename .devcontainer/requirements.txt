@@ -1,4 +1,5 @@
-timm
+pytorch-tabnet2
+torchmetrics
 segmentation-models-pytorch
 openslide-python
 openslide-bin
