@@ -16,7 +16,7 @@ import gc
 from dataset import TableDataset
 from model import MLPClassifier
 from train import train_model
-from utils import get_target_transform, get_inverse_transform, perform_dim_reduction
+from utils import perform_dim_reduction
 
 # Load configuration from YAML file
 with open("mlp_classification/config.yaml", 'r') as config_file:
@@ -53,7 +53,6 @@ ARCHITECTURE_FACTOR = config.get('architecture_factor')
 DROPOUT = config.get('dropout')
 
 # Target and Features Transformations
-TARGET_TRANSFORM = config.get('target_transform')
 FEATURES_TRANSFORM = config.get('features_transform')
 
 # Dimensionality Reduction Hyperparameters
@@ -62,14 +61,10 @@ REDUCTION_N_COMPONENT = config.get('reduction_n_component')
 ICA = config.get('ica', False)  # Check if ICA is enabled
 
 # Define model suffix and paths
-MODEL_SUFFIX = f"{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{ARCHITECTURE_FACTOR}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}{'_ica' if ICA else ''}_{LEARNING_RATE}_{WEIGHT_DECAY}"
+MODEL_SUFFIX = f"{THRESHOLD}_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{ARCHITECTURE_FACTOR}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}{'_ica' if ICA else ''}_{LEARNING_RATE}_{WEIGHT_DECAY}"
 MODEL_SAVE_PATH = f'results/models/MLP_classification_{MODEL_SUFFIX}.pth'
 PLOT_LOSS_PATH = f'results/figures/MLP_classification_loss_{MODEL_SUFFIX}.png'
 MODEL_BASE_PATH = f"results/models/{REDUCTION_N_COMPONENT}"
-
-# Define target transformation functions
-target_transform = get_target_transform(TARGET_TRANSFORM)
-inverse_transform = get_inverse_transform(TARGET_TRANSFORM)
 
 # Determine device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -91,6 +86,9 @@ if EXCLUDED_SLIDES:
 # Extract unique slides and their count
 slides = pixels['batch'].unique()
 n_slides = len(slides)
+
+# Threshold the target to create a binary classification vector
+pixels[f'Binary_{TARGET}'] = (pixels[TARGET] > THRESHOLD).astype(int)
 
 # Scale the features without centering
 if SCALE:
@@ -149,8 +147,7 @@ else:
 print("Creating dataset...")
 dataset = TableDataset(
     features=peaks.values,
-    target=np.where(pixels[TARGET].values > THRESHOLD, 1, 0),  # Binarize target based on threshold
-    target_transform=target_transform
+    target=pixels[f'Binary_{TARGET}'].values,
 )
 
 print(f"Dataset created with {dataset.n_samples} samples and {dataset.n_features} features.")

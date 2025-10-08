@@ -12,7 +12,6 @@ from tqdm import tqdm
 
 from dataset import TableDataset
 from model import MLPClassifier
-from utils import get_target_transform, get_inverse_transform
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -75,8 +74,7 @@ if __name__ == '__main__':
     ARCHITECTURE_FACTOR = config.get('architecture_factor') # Factor to adjust hidden layer sizes (1 = Uniform, < 1 = Funnel, > 1 = Expanding)
     DROPOUT = config.get('dropout')  # Dropout rate
 
-    # Target and Features Transformations
-    TARGET_TRANSFORM = config.get('target_transform')
+    # Features Transformations
     FEATURES_TRANSFORM = config.get('features_transform')
 
     # Dimensionality Reduction Hyperparameters
@@ -85,13 +83,9 @@ if __name__ == '__main__':
     ICA = config.get('ica', False)  # Check if ICA is enabled
 
     # Define model suffix and paths
-    MODEL_SUFFIX = f"{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{ARCHITECTURE_FACTOR}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}{'_ica' if ICA else ''}_{LEARNING_RATE}_{WEIGHT_DECAY}"
+    MODEL_SUFFIX = f"{THRESHOLD}_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{ARCHITECTURE_FACTOR}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}{'_ica' if ICA else ''}_{LEARNING_RATE}_{WEIGHT_DECAY}"
     MODEL_PATH = f'results/models/MLP_classification_{MODEL_SUFFIX}.pth'
     PREDICTIONS_PATH = f'results/predictions/classified_mlp_{MODEL_SUFFIX}.npy'
-
-    # Define target transformation functions
-    target_transform = get_target_transform(TARGET_TRANSFORM)
-    inverse_transform = get_inverse_transform(TARGET_TRANSFORM)
 
     # Determine device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -101,6 +95,9 @@ if __name__ == '__main__':
     print("Loading data...")
     peaks_slides = pd.read_feather(PEAKS_PATH)
     pixels_slides = pd.read_feather(PIXELS_PATH)
+
+    # Threshold the target to create a binary classification vector
+    pixels_slides[f'Binary_{TARGET}'] = (pixels_slides[TARGET] > THRESHOLD).astype(int)
 
     # Load dimensionality reduction models
     if REDUCTION_N_COMPONENT is not None:
@@ -205,8 +202,7 @@ if __name__ == '__main__':
         tqdm.write("Creating dataset...")
         dataset = TableDataset(
             features=peaks.values,
-            target=np.where(pixels[TARGET].values > THRESHOLD, 1, 0),  # Binarize target based on threshold
-            target_transform=target_transform
+            target=pixels[f'Binary_{TARGET}'].values
         )
 
         tqdm.write(f"Dataset created with {dataset.n_samples} samples and {dataset.n_features} features.")
@@ -215,13 +211,9 @@ if __name__ == '__main__':
         tqdm.write("Making predictions...")
         predictions = predict(model, dataset.features, device, batch_size=BATCH_SIZE)
 
-        # Inverse transform predictions
-        tqdm.write(f"Applying inverse transformation to predictions using {TARGET_TRANSFORM}...")
-        predictions = inverse_transform(predictions)
-
         # Add the predictions to the pixels DataFrame
         tqdm.write("Adding predictions to pixels DataFrame...")
-        pixels[f'classified_{TARGET}'] = predictions
+        pixels[f'Classified_{TARGET}'] = predictions
         pixels_all = pd.concat([pixels_all, pixels], ignore_index=True)
         
         # Clear memory
@@ -234,6 +226,9 @@ if __name__ == '__main__':
     pixels_all = pixels_all[~pixels_all['Defects']]
     pixels_all = pixels_all[~pixels_all['Defects']]
 
+    # Threshold the predictions to create a binary classified vector
+    pixels_all[f'Binary_classified_{TARGET}'] = (pixels_all[f'Classified_{TARGET}'] > THRESHOLD).astype(int)
+
     # Save classification predictions to CSV
     output_path = f"results/predictions/mlb_classification_{TARGET}_{MODEL_SUFFIX}.csv"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -244,14 +239,9 @@ if __name__ == '__main__':
     pixels_lesion = pixels_all[pixels_all['Lesion']]
 
     # Compute IOU
-    y_true = (pixels_all[TARGET] >= THRESHOLD).astype(int)
-    y_pred = (pixels_all[f'classified_{TARGET}'] >= THRESHOLD).astype(int)
-    iou = jaccard_score(y_true, y_pred)
+    iou = jaccard_score(pixels_all[f'Binary_{TARGET}'], pixels_all[f'Binary_classified_{TARGET}'])
+    iou_lesion = jaccard_score(pixels_lesion[f'Binary_{TARGET}'], pixels_lesion[f'Binary_classified_{TARGET}'])
     print(f"IOU (All pixels) at threshold {THRESHOLD}: {iou:.4f}")
-
-    y_true_lesion = (pixels_lesion[TARGET] >= THRESHOLD).astype(int)
-    y_pred_lesion = (pixels_lesion[f'classified_{TARGET}'] >= THRESHOLD).astype(int)
-    iou_lesion = jaccard_score(y_true_lesion, y_pred_lesion)
     print(f"IOU (Lesion pixels) at threshold {THRESHOLD}: {iou_lesion:.4f}")
 
     # Plot the classified target density for each slide compared to the original target density
@@ -261,14 +251,12 @@ if __name__ == '__main__':
         pixels_slide = pixels_all[pixels_all['batch'] == slide]
         if i % 2 == 0:
             # Create a pivot table for imshow
-            heatmap_data = pixels_slide.pivot(index='y', columns='x', values=TARGET)
-            im = ax[i].imshow(heatmap_data, cmap='viridis', vmin=0, vmax=np.quantile(pixels_slide[TARGET], 0.99), origin='upper')
-            fig.colorbar(im, ax=ax[i])
+            heatmap_data = pixels_slide.pivot(index='y', columns='x', values=f'Binary_{TARGET}')
+            im = ax[i].imshow(heatmap_data, cmap='viridis', origin='upper')
         else:
             # Create a pivot table for imshow
-            heatmap_data = pixels_slide.pivot(index='y', columns='x', values=f'classified_{TARGET}')
+            heatmap_data = pixels_slide.pivot(index='y', columns='x', values=f'Binary_classified_{TARGET}')
             im = ax[i].imshow(heatmap_data, cmap='viridis', origin='upper')
-            fig.colorbar(im, ax=ax[i])
 
         ax[i].set_title(f"{slide} {'Original' if i%2 == 0 else 'Classified'}")
         ax[i].set_xticks([])
@@ -284,14 +272,12 @@ if __name__ == '__main__':
         pixels_slide = pixels_lesion[pixels_lesion['batch'] == slide]
         if i % 2 == 0:
             # Create a pivot table for imshow
-            heatmap_data = pixels_slide.pivot(index='y', columns='x', values=TARGET)
-            im = ax[i].imshow(heatmap_data, cmap='viridis', vmin=0, vmax=np.quantile(pixels_slide[TARGET], 0.99), origin='upper')
-            fig.colorbar(im, ax=ax[i])
+            heatmap_data = pixels_slide.pivot(index='y', columns='x', values=f'Binary_{TARGET}')
+            im = ax[i].imshow(heatmap_data, cmap='viridis', origin='upper')
         else:
             # Create a pivot table for imshow
-            heatmap_data = pixels_slide.pivot(index='y', columns='x', values=f'classified_{TARGET}')
+            heatmap_data = pixels_slide.pivot(index='y', columns='x', values=f'Binary_classified_{TARGET}')
             im = ax[i].imshow(heatmap_data, cmap='viridis', origin='upper')
-            fig.colorbar(im, ax=ax[i])
 
         ax[i].set_title(f"{slide} {'Original' if i%2 == 0 else 'Classified'}")
         ax[i].set_xticks([])
