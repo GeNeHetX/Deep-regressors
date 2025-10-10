@@ -26,6 +26,7 @@ with open("mlp_classification/config.yaml", 'r') as config_file:
 PATH = config.get('path_to_data')
 PEAKS_PATH = config.get('peaks_path')
 PIXELS_PATH = config.get('pixels_path')
+PATH_TO_RESULTS = config.get('path_to_results')
 TARGET = config.get('target')
 THRESHOLD = config.get('threshold')
 EXCLUDED_SLIDES = config.get('excluded_slides')
@@ -62,9 +63,9 @@ ICA = config.get('ica', False)  # Check if ICA is enabled
 
 # Define model suffix and paths
 MODEL_SUFFIX = f"{THRESHOLD}_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{ARCHITECTURE_FACTOR}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}{'_ica' if ICA else ''}_{LEARNING_RATE}_{WEIGHT_DECAY}"
-MODEL_SAVE_PATH = f'results/models/MLP_classification_{MODEL_SUFFIX}.pth'
-PLOT_LOSS_PATH = f'results/figures/MLP_classification_loss_{MODEL_SUFFIX}.png'
-MODEL_BASE_PATH = f"results/models/{REDUCTION_N_COMPONENT}"
+MODEL_SAVE_PATH = f'{PATH_TO_RESULTS}/models/mlp_classification_{MODEL_SUFFIX}.pth'
+PLOT_LOSS_PATH = f'{PATH_TO_RESULTS}/figures/mlp_classification_loss_{MODEL_SUFFIX}.png'
+MODEL_BASE_PATH = f"{PATH_TO_RESULTS}/models/{REDUCTION_N_COMPONENT}"
 
 # Determine device
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -97,7 +98,7 @@ if SCALE:
         # Check if the slide exists in pixels
         try:
             # Load the scaler for the current slide
-            scaler = joblib.load(f"results/models/scalers/scaler_{slide}.joblib")
+            scaler = joblib.load(f"{PATH_TO_RESULTS}/models/scalers/scaler_{slide}.joblib")
         except FileNotFoundError:
             # Initialize scaler without centering
             scaler = StandardScaler(with_mean=False, with_std=True)
@@ -106,7 +107,7 @@ if SCALE:
             scaler.fit(peaks.loc[pixels['batch'] == slide].values)
 
             # Save the scaler
-            joblib.dump(scaler, f"results/models/scalers/scaler_{slide}.joblib")
+            joblib.dump(scaler, f"{PATH_TO_RESULTS}/models/scalers/scaler_{slide}.joblib")
 
         # Transform the features
         peaks.loc[pixels['batch'] == slide] = scaler.transform(peaks.loc[pixels['batch'] == slide].values)

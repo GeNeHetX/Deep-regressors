@@ -108,23 +108,25 @@ def train_model(model: nn.Module,
 
             if avg_val_loss < best_val_loss - min_delta:
                 best_val_loss = avg_val_loss
+                best_iou = history['val_iou'][-1]
                 best_epoch = epoch
                 patience_counter = 0
                 if model_save_path:
                     torch.save(model.state_dict(), model_save_path)
 
             if patience_counter >= patience:
-                tqdm.write(f"Early stopping triggered at epoch {epoch+1}. Best epoch was {best_epoch+1} with val loss {best_val_loss:.2e}.")
+                tqdm.write(f"Early stopping triggered at epoch {epoch+1}. Best epoch was {best_epoch+1} with val loss {best_val_loss:.2e} and val IOU {best_iou:.4f}.")
                 break
 
     print("Training finished.")
 
     # Optionally plot the losses
     if plot_loss_path:
-        fig, ax = plt.subplots(figsize=(5, 10), nrows=2)
+        fig, ax = plt.subplots(figsize=(7, 10), nrows=2)
 
         ax[0].plot(history['train_iou'], label='Training IOU')
         ax[0].plot(history['val_iou'], label='Validation IOU')
+        ax[0].axvline(best_epoch, color='r', linestyle='--', label='Best Epoch')
         ax[0].set_xlabel('Epoch')
         ax[0].set_ylabel('Intersection over Union (IOU)')
         ax[0].set_title('Training and Validation IOU Over Epochs')
@@ -132,6 +134,7 @@ def train_model(model: nn.Module,
 
         ax[1].plot(history['train_loss'], label='Training Loss')
         ax[1].plot(history['val_loss'], label='Validation Loss')
+        ax[1].axvline(best_epoch, color='r', linestyle='--', label='Best Epoch')
         ax[1].set_xlabel('Epoch')
         ax[1].set_ylabel('Loss')
         ax[1].set_title('Training and Validation Loss Over Epochs')

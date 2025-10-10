@@ -1,10 +1,12 @@
 # Data configuration
 path_to_data: data/MALDI_IHC/aligned_peaks/results
+# path_to_results: results_hes
+# peaks_path: data/MALDI_IHC/aligned_peaks/results/hes_features.feather
+path_to_results: results
 peaks_path: data/MALDI_IHC/aligned_peaks/results/peaks_scvi_256.feather
 pixels_path: data/MALDI_IHC/aligned_peaks/results/observations.feather
 target: Density_CD8
-threshold: 0.005
-target_transform: none  # options: sqrt, log, none
+threshold: 0.01
 features_transform: none  # options: log1p, none
 scale: False
 excluded_slides:
@@ -20,13 +22,13 @@ excluded_slides:
   - 552138-25
 
 # Training configuration
-batch_size: 2048
+batch_size: 4096
 validation_split: 0.1
 
 # Optimization configuration
 num_epochs: 1000
-learning_rate: 1
-weight_decay: 0.00001
+learning_rate: 0.1
+weight_decay: 0.001
 scheduler_factor: 0.2
 scheduler_patience: 5
 
@@ -46,7 +48,7 @@ dropout: 0.2
 # ica: True
 
 # Inference configuration
-path_to_data_inference: data/MALDI_IHC/aligned_peaks/results
+# peaks_path_inference: data/MALDI_IHC/aligned_peaks/results/hes_features_tissue.feather
 peaks_path_inference: data/MALDI_IHC/aligned_peaks/results/peaks_scvi_256_tissue.feather
 pixels_path_inference: data/MALDI_IHC/aligned_peaks/results/observations_tissue.feather
 target_inference: Density_CD8

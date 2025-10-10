@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch.optim as optim
 
 from torch.utils.data import DataLoader
+from torchmetrics.regression import R2Score
+
 from tqdm import tqdm
 
 import matplotlib.pyplot as plt
@@ -46,47 +48,57 @@ def train_model(model: nn.Module,
     print(f"Starting training on {device} for {num_epochs} epochs...")
 
     # Initialize history dictionary
-    history = {'train_loss': [], 'val_loss': []}
+    history = {'train_loss': [], 'val_loss': [], 'train_r2': [], 'val_r2': []}
 
     best_val_loss = float('inf')
     best_epoch = 0
     patience_counter = 0
 
+    train_r2_metric = R2Score().to(device)
+    val_r2_metric = R2Score().to(device)
+
     for epoch in tqdm(range(num_epochs), desc="Training Progress", unit="epoch"):
         # Training phase
         model.train()
         epoch_train_loss = 0.0
+        train_r2_metric.reset()
         for inputs, targets in train_loader:
             inputs, targets = inputs.to(device), targets.to(device)
             outputs = model(inputs)
             loss = criterion(outputs, targets)
             epoch_train_loss += loss.item() * inputs.size(0)
+            train_r2_metric.update(outputs, targets)    
+
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
         avg_train_loss = epoch_train_loss / len(train_loader.dataset)
         history['train_loss'].append(avg_train_loss)
+        history['train_r2'].append(train_r2_metric.compute().item())
 
         # Validation phase
         model.eval()
         epoch_val_loss = 0.0
+        val_r2_metric.reset()
         with torch.no_grad():
             for inputs, targets in val_loader:
                 inputs, targets = inputs.to(device), targets.to(device)
                 outputs = model(inputs)
                 loss = criterion(outputs, targets)
                 epoch_val_loss += loss.item() * inputs.size(0)
+                val_r2_metric.update(outputs, targets)
 
         avg_val_loss = epoch_val_loss / len(val_loader.dataset)
         history['val_loss'].append(avg_val_loss)
+        history['val_r2'].append(val_r2_metric.compute().item())
 
         # Step the scheduler if provided
         if scheduler is not None:
             scheduler.step(avg_val_loss)
 
         # Print losses for the epoch
-        tqdm.write(f"Epoch [{epoch+1}/{num_epochs}], Train Loss: {avg_train_loss:.2e}, Val Loss: {avg_val_loss:.2e}")
+        tqdm.write(f"Epoch [{epoch+1}/{num_epochs}], Train Loss: {avg_train_loss:.2e}, Val Loss: {avg_val_loss:.2e}, Train R2: {history['train_r2'][-1]:.4f}, Val R2: {history['val_r2'][-1]:.4f}")
 
         # Early stopping logic
         if epoch > 0:
@@ -96,26 +108,39 @@ def train_model(model: nn.Module,
 
             if avg_val_loss < best_val_loss - min_delta:
                 best_val_loss = avg_val_loss
+                best_r2 = history['val_r2'][-1]
                 best_epoch = epoch
                 patience_counter = 0
                 if model_save_path:
                     torch.save(model.state_dict(), model_save_path)
 
             if patience_counter >= patience:
-                tqdm.write(f"Early stopping triggered at epoch {epoch+1}. Best epoch was {best_epoch+1} with val loss {best_val_loss:.2e}.")
+                tqdm.write(f"Early stopping triggered at epoch {epoch+1}. Best epoch was {best_epoch+1} with val loss {best_val_loss:.2e} and val R2 {best_r2:.4f}.")
                 break
 
     print("Training finished.")
 
     # Optionally plot the losses
     if plot_loss_path:
-        plt.figure(figsize=(10, 5))
-        plt.plot(history['train_loss'], label='Training Loss')
-        plt.plot(history['val_loss'], label='Validation Loss')
-        plt.xlabel('Epoch')
-        plt.ylabel('Loss')
-        plt.title('Training and Validation Loss Over Epochs')
-        plt.legend()
+        fig, ax = plt.subplots(figsize=(7, 10), nrows=2)
+
+        ax[0].plot(history['train_r2'], label='Training R2')
+        ax[0].plot(history['val_r2'], label='Validation R2')
+        ax[0].axvline(best_epoch, color='r', linestyle='--', label='Best Epoch')
+        ax[0].set_xlabel('Epoch')
+        ax[0].set_ylabel('R2 Score')
+        ax[0].set_title('Training and Validation R2 Over Epochs')
+        ax[0].legend()
+
+        ax[1].plot(history['train_loss'], label='Training Loss')
+        ax[1].plot(history['val_loss'], label='Validation Loss')
+        ax[1].axvline(best_epoch, color='r', linestyle='--', label='Best Epoch')
+        ax[1].set_xlabel('Epoch')
+        ax[1].set_ylabel('Loss')
+        ax[1].set_title('Training and Validation Loss Over Epochs')
+        ax[1].legend()
+
+        plt.tight_layout()
         plt.savefig(plot_loss_path)
         plt.close()
 

@@ -55,7 +55,7 @@ if __name__ == '__main__':
     with open("mlp_classification/config.yaml", 'r') as config_file:
         config = yaml.safe_load(config_file)  # Load model configuration from YAML file
 
-    PATH = config.get('path_to_data_inference')
+    PATH = config.get('path_to_results')
     PEAKS_PATH = config.get('peaks_path_inference')
     PIXELS_PATH = config.get('pixels_path_inference')
     TARGET = config.get('target_inference')
@@ -84,8 +84,8 @@ if __name__ == '__main__':
 
     # Define model suffix and paths
     MODEL_SUFFIX = f"{THRESHOLD}_{HIDDEN_DIM}_{NUM_HIDDEN_LAYERS}_{ARCHITECTURE_FACTOR}_{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}{'_ica' if ICA else ''}_{LEARNING_RATE}_{WEIGHT_DECAY}"
-    MODEL_PATH = f'results/models/MLP_classification_{MODEL_SUFFIX}.pth'
-    PREDICTIONS_PATH = f'results/predictions/classified_mlp_{MODEL_SUFFIX}.npy'
+    MODEL_PATH = f'{PATH}/models/mlp_classification_{MODEL_SUFFIX}.pth'
+    PREDICTIONS_PATH = f'{PATH}/predictions/classified_mlp_{MODEL_SUFFIX}.npy'
 
     # Determine device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -103,12 +103,12 @@ if __name__ == '__main__':
     if REDUCTION_N_COMPONENT is not None:
         print(f"Loading and applying dimensionality reduction model: {REDUCTION_METHOD.upper()} with n_components={REDUCTION_N_COMPONENT}{' + ICA' if ICA else ''}...")
 
-        model_reduction_path = f"results/models/{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}.joblib"
+        model_reduction_path = f"{PATH}/models/{REDUCTION_N_COMPONENT}_{REDUCTION_METHOD}.joblib"
         print(f"Loading dimensionality reduction model from {model_reduction_path}")
         model_reduction = joblib.load(model_reduction_path)
 
         if ICA:
-            ica_model_path = f"results/models/{REDUCTION_N_COMPONENT}_ica.joblib"
+            ica_model_path = f"{PATH}/models/{REDUCTION_N_COMPONENT}_ica.joblib"
             print(f"Loading ICA model from {ica_model_path}")
             ica_model = joblib.load(ica_model_path)
 
@@ -166,7 +166,7 @@ if __name__ == '__main__':
         # Scale the features without centering
         if SCALE:
             tqdm.write("Scaling features...")
-            scaler = joblib.load(f"results/models/scalers/scaler_{slide}.joblib")  # load scaler
+            scaler = joblib.load(f"{PATH}/models/scalers/scaler_{slide}.joblib")  # load scaler
             peaks.loc[pixels['batch'] == slide] = scaler.transform(peaks.loc[pixels['batch'] == slide].values)  # Transform the features
 
         # Count the nan values in the peaks dataframe
@@ -230,7 +230,7 @@ if __name__ == '__main__':
     pixels_all[f'Binary_classified_{TARGET}'] = (pixels_all[f'Classified_{TARGET}'] > THRESHOLD).astype(int)
 
     # Save classification predictions to CSV
-    output_path = f"results/predictions/mlb_classification_{TARGET}_{MODEL_SUFFIX}.csv"
+    output_path = f"{PATH}/predictions/mlp_classification_{TARGET}_{MODEL_SUFFIX}.csv"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     pixels_all.to_csv(output_path, index=False)
     print(f"Predictions saved to {output_path}")
@@ -264,7 +264,7 @@ if __name__ == '__main__':
         ax[i].axis('equal')
         ax[i].invert_yaxis()
 
-    plt.savefig(f"results/figures/mlb_classification_heatmaps_{TARGET}_{MODEL_SUFFIX}.png")
+    plt.savefig(f"{PATH}/figures/mlp_classification_heatmaps_{TARGET}_{MODEL_SUFFIX}.png")
 
     fig, axs = plt.subplots(nrows=11, ncols=6, figsize=(25, 40), tight_layout=True)
     ax = axs.flatten()
@@ -285,4 +285,4 @@ if __name__ == '__main__':
         ax[i].axis('equal')
         ax[i].invert_yaxis()
 
-    plt.savefig(f"results/figures/mlb_classification_heatmaps_{TARGET}_{MODEL_SUFFIX}_lesion.png")
+    plt.savefig(f"{PATH}/figures/mlp_classification_heatmaps_{TARGET}_{MODEL_SUFFIX}_lesion.png")

@@ -1,6 +1,7 @@
 # Data configuration
 path_to_data: data/MALDI_IHC/aligned_peaks/results
-peaks_path: data/MALDI_IHC/aligned_peaks/results/peaks_scvi_256.feather
+path_to_results: results_hes
+peaks_path: data/MALDI_IHC/aligned_peaks/results/hes_features.feather
 pixels_path: data/MALDI_IHC/aligned_peaks/results/observations.feather
 target: Density_CD8
 target_transform: sqrt  # options: sqrt, log, none
@@ -19,14 +20,14 @@ excluded_slides:
   - 552138-25
 
 # Training configuration
-batch_size: 1024
+batch_size: 2048
 validation_split: 0.1
 
 # Optimization configuration
 num_epochs: 1000
-huber_delta: 1
-learning_rate: 1
-weight_decay: 0.00000001
+huber_delta: 10
+learning_rate: 0.1
+weight_decay: 0.0001
 scheduler_factor: 0.2
 scheduler_patience: 5
 
@@ -46,8 +47,7 @@ dropout: 0.2
 # ica: True
 
 # Inference configuration
-path_to_data_inference: data/MALDI_IHC/aligned_peaks/results
-peaks_path_inference: data/MALDI_IHC/aligned_peaks/results/peaks_scvi_256_tissue.feather
+peaks_path_inference: data/MALDI_IHC/aligned_peaks/results/hes_features_tissue.feather
 pixels_path_inference: data/MALDI_IHC/aligned_peaks/results/observations_tissue.feather
 target_inference: Density_CD8
 batch_size_inference: 100000
