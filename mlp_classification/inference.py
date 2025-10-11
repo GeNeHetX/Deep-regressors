@@ -7,7 +7,8 @@ import joblib
 import gc
 import os
 
-from sklearn.metrics import jaccard_score
+from sklearn.metrics import jaccard_score, precision_recall_curve, auc, roc_auc_score, roc_curve, confusion_matrix, classification_report  
+
 from tqdm import tqdm
 
 from dataset import TableDataset
@@ -60,6 +61,7 @@ if __name__ == '__main__':
     PIXELS_PATH = config.get('pixels_path_inference')
     TARGET = config.get('target_inference')
     THRESHOLD = config.get('threshold')
+    INFERENCE_THRESHOLD = config.get('inference_threshold')  # Default to 0.5 if not provided
     EXCLUDED_SLIDES = config.get('excluded_slides')  # Default to empty list if not provided
     SCALE = config.get('scale')
     BATCH_SIZE = config.get('batch_size_inference')
@@ -226,8 +228,30 @@ if __name__ == '__main__':
     pixels_all = pixels_all[~pixels_all['Defects']]
     pixels_all = pixels_all[~pixels_all['Defects']]
 
+    # Subset the data for visualization
+    pixels_lesion = pixels_all[pixels_all['Lesion']].copy().reset_index(drop=True)
+
+    # Calculate precision-recall curve
+    precision, recall, thresholds = precision_recall_curve(pixels_lesion[f'Binary_{TARGET}'], pixels_lesion[f'Classified_{TARGET}'])
+
+    # Calculate the intersection threshold
+    intersection_threshold = thresholds[np.argmin(np.abs(recall - precision))]
+
+    # Calculate AUC for the precision-recall curve
+    auc_score = auc(recall, precision)
+    print(f"AUC: {auc_score:.2f}")
+    print(f"Intersection threshold: {intersection_threshold:.2f}")
+
     # Threshold the predictions to create a binary classified vector
-    pixels_all[f'Binary_classified_{TARGET}'] = (pixels_all[f'Classified_{TARGET}'] > THRESHOLD).astype(int)
+    if INFERENCE_THRESHOLD:
+        inference_threshold = INFERENCE_THRESHOLD
+        print(f"Using provided inference threshold: {inference_threshold:.2f}")
+    else:
+        inference_threshold = intersection_threshold
+        print(f"Using intersection threshold as inference threshold: {inference_threshold:.2f}")
+    
+    pixels_all[f'Binary_classified_{TARGET}'] = (pixels_all[f'Classified_{TARGET}'] > inference_threshold).astype(int)
+    pixels_lesion[f'Binary_classified_{TARGET}'] = (pixels_lesion[f'Classified_{TARGET}'] > inference_threshold).astype(int)
 
     # Save classification predictions to CSV
     output_path = f"{PATH}/predictions/mlp_classification_{TARGET}_{MODEL_SUFFIX}.csv"
@@ -235,14 +259,85 @@ if __name__ == '__main__':
     pixels_all.to_csv(output_path, index=False)
     print(f"Predictions saved to {output_path}")
 
-    # Subset the data for visualization
-    pixels_lesion = pixels_all[pixels_all['Lesion']]
+    # Classification report
+    report_lesion = classification_report(pixels_lesion[f'Binary_{TARGET}'], pixels_lesion[f'Binary_classified_{TARGET}'], target_names=['Low', 'High'])
+    report = classification_report(pixels_all[f'Binary_{TARGET}'], pixels_all[f'Binary_classified_{TARGET}'], target_names=['Low', 'High'])
+    print("Classification Report (Lesion pixels):\n", report_lesion)
+    print("Classification Report (All pixels):\n", report)
 
     # Compute IOU
     iou = jaccard_score(pixels_all[f'Binary_{TARGET}'], pixels_all[f'Binary_classified_{TARGET}'])
     iou_lesion = jaccard_score(pixels_lesion[f'Binary_{TARGET}'], pixels_lesion[f'Binary_classified_{TARGET}'])
     print(f"IOU (All pixels) at threshold {THRESHOLD}: {iou:.4f}")
     print(f"IOU (Lesion pixels) at threshold {THRESHOLD}: {iou_lesion:.4f}")
+
+    # Compute ROC AUC
+    roc_auc = roc_auc_score(pixels_all[f'Binary_{TARGET}'], pixels_all[f'Classified_{TARGET}'])
+    roc_auc_lesion = roc_auc_score(pixels_lesion[f'Binary_{TARGET}'], pixels_lesion[f'Classified_{TARGET}'])
+
+    print(f"ROC AUC (All pixels): {roc_auc:.4f}")
+    print(f"ROC AUC (Lesion pixels): {roc_auc_lesion:.4f}")
+
+    # Compute confusion matrix
+    cm = confusion_matrix(pixels_all[f'Binary_{TARGET}'], pixels_all[f'Binary_classified_{TARGET}'])
+    cm_lesion = confusion_matrix(pixels_lesion[f'Binary_{TARGET}'], pixels_lesion[f'Binary_classified_{TARGET}'])
+
+    # Compute the roc curve
+    fpr, tpr, _ = roc_curve(pixels_all[f'Binary_{TARGET}'], pixels_all[f'Classified_{TARGET}'])
+    fpr_lesion, tpr_lesion, _ = roc_curve(pixels_lesion[f'Binary_{TARGET}'], pixels_lesion[f'Classified_{TARGET}'])
+
+    # Plot the confusion matrix
+    fig, ax = plt.subplots(3, 2, figsize=(12, 15))
+
+    # Precision-Recall curve (All pixels)
+    ax[0, 0].plot(recall, precision, color="purple", label=f"AUC = {auc_score:.2f}")
+    ax[0, 0].fill_between(recall, precision, alpha=0.2, color="purple")
+    ax[0, 0].set_xlabel("Recall")
+    ax[0, 0].set_ylabel("Precision")
+    ax[0, 0].set_title("Precision-Recall curve")
+    ax[0, 0].legend()
+
+    # Precision & Recall vs Threshold (All pixels)
+    ax[0, 1].plot(thresholds, precision[:-1], label="Precision")
+    ax[0, 1].plot(thresholds, recall[:-1], label="Recall")
+    if INFERENCE_THRESHOLD:
+        ax[0, 1].axvline(x=inference_threshold, color='red', linestyle='--', label=f'Inference Threshold {inference_threshold:.2f}')
+    ax[0, 1].axvline(x=intersection_threshold, color='purple', linestyle='--', label=f'Intersection Threshold {intersection_threshold:.2f}')
+    ax[0, 1].set_xlabel("Threshold")
+    ax[0, 1].set_ylabel("Precision & Recall")
+    ax[0, 1].set_title("Precision-Recall vs Threshold")
+    ax[0, 1].legend()
+
+    # Confusion Matrix (Lesion pixels)
+    sns.heatmap(cm_lesion, annot=True, fmt='d', cmap='Blues', cbar=False, ax=ax[1, 0])
+    ax[1, 0].set_xlabel('Predicted Label')
+    ax[1, 0].set_ylabel('True Label')
+    ax[1, 0].set_title('Confusion Matrix (Lesion pixels)')
+
+    # ROC Curve (Lesion pixels)
+    ax[1, 1].plot([0, 1], [0, 1], linestyle='--')
+    ax[1, 1].plot(fpr_lesion, tpr_lesion, label=f"ROC AUC = {roc_auc_lesion:.2f}")
+    ax[1, 1].set_xlabel("False Positive Rate")
+    ax[1, 1].set_ylabel("True Positive Rate")
+    ax[1, 1].set_title("ROC Curve (Lesion pixels)")
+    ax[1, 1].legend()
+
+    # Confusion Matrix (All pixels)
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False, ax=ax[2, 0])
+    ax[2, 0].set_xlabel('Predicted Label')
+    ax[2, 0].set_ylabel('True Label')
+    ax[2, 0].set_title('Confusion Matrix (All pixels)')
+
+    # ROC Curve (All pixels)
+    ax[2, 1].plot([0, 1], [0, 1], linestyle='--')
+    ax[2, 1].plot(fpr, tpr, label=f"ROC AUC = {roc_auc:.2f}")
+    ax[2, 1].set_xlabel("False Positive Rate")
+    ax[2, 1].set_ylabel("True Positive Rate")
+    ax[2, 1].set_title("ROC Curve (All pixels)")
+    ax[2, 1].legend()
+
+    plt.tight_layout()
+    plt.savefig(f"{PATH}/figures/mlp_classification_report_{TARGET}_{MODEL_SUFFIX}.png")
 
     # Plot the classified target density for each slide compared to the original target density
     fig, axs = plt.subplots(nrows=11, ncols=6, figsize=(25, 40), tight_layout=True)
