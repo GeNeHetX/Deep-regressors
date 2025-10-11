@@ -23,11 +23,12 @@ def mlp_architecture(input_dim: int, output_dim: int=1, hidden_dim: int=256, num
         layers.append(nn.Linear(previous_dim, int(current_dim)))  # Add a linear layer
         if i < num_hidden_layers - 1:  # No activation after the last layer
             layers.append(nn.ReLU())
-        if dropout > 0:
-            layers.append(nn.Dropout(dropout))
+            if dropout > 0:
+                layers.append(nn.Dropout(dropout))
         previous_dim = int(current_dim)  # Update previous dimension for the next layer
         current_dim = int(current_dim * architecture_factor)  # Adjust the current dimension based on the architecture factor
     layers.append(nn.Linear(previous_dim, output_dim))
+    
     return layers
 
 class MLPRegression(nn.Module):
@@ -61,5 +62,5 @@ class MLPRegression(nn.Module):
 # Example usage (optional, for testing this file directly)
 if __name__ == '__main__':
     # Example: 2 input features, 1 output value
-    model = MLPRegression(input_dim=2, output_dim=1)
+    model = MLPRegression(input_dim=1, output_dim=1, hidden_dim=512, num_hidden_layers=3, architecture_factor=0.5, dropout=0.2)
     print(model)

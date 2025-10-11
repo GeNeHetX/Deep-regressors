@@ -24,16 +24,12 @@ def mlp_architecture(input_dim: int, output_dim: int=1, hidden_dim: int=256, num
         layers.append(nn.Linear(previous_dim, int(current_dim)))  # Add a linear layer
         if i < num_hidden_layers - 1:  # No activation after the last layer
             layers.append(nn.ReLU())
-        if dropout > 0:
-            layers.append(nn.Dropout(dropout))
+            if dropout > 0:
+                layers.append(nn.Dropout(dropout))
         previous_dim = int(current_dim)  # Update previous dimension for the next layer
         current_dim = int(current_dim * architecture_factor)  # Adjust the current dimension based on the architecture factor
     layers.append(nn.Linear(previous_dim, output_dim))
-    if classification:
-        if output_dim == 1:
-            layers.append(nn.Sigmoid())
-        else:
-            layers.append(nn.Softmax(dim=1))
+
     return layers
 
 
@@ -97,5 +93,5 @@ class MLPClassifier(nn.Module):
 # Example usage (optional, for testing this file directly)
 if __name__ == '__main__':
     # Example: 256 input features, 10 output classes
-    model = MLPClassifier(input_dim=256, output_dim=1, hidden_dim=128, num_hidden_layers=3, architecture_factor=0.5, dropout=0.2)
+    model = MLPClassifier(input_dim=256, output_dim=1, hidden_dim=512, num_hidden_layers=3, architecture_factor=0.5, dropout=0.2)
     print(model)
