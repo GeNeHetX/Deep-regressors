@@ -4,6 +4,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from sklearn.preprocessing import StandardScaler
+from torchvision.ops import sigmoid_focal_loss
 from tqdm import tqdm
 import joblib
 import yaml
@@ -187,13 +188,19 @@ model = MLPClassifier(
 )
 print(model)
 
-# Calculate pos_weight as (num_negatives / num_positives)
-pos_weight = torch.tensor([(dataset.target == 0).sum().item() / (dataset.target == 1).sum().item()],
-                          dtype=torch.float32,
-                          device=device)
+# Calculate alpha for Focal Loss to address class imbalance because positive is rarer
+alpha = (dataset.target == 0).sum().item() / dataset.n_samples
+gamma = 2.0
+print(f"Using Focal Loss with alpha={alpha:.4f} and gamma={gamma:.4f}")
 
-# Loss Function
-criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+# Focal Loss Function
+criterion = lambda outputs, targets: sigmoid_focal_loss(
+    inputs=outputs,
+    targets=targets,
+    alpha=alpha,
+    gamma=gamma,
+    reduction='mean'
+)
 
 # Optimizer
 optimizer = optim.SGD(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
